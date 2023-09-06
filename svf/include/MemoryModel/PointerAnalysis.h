@@ -79,6 +79,7 @@ public:
         CFLFSCI_WPA,		///< Flow-insensitive, context-sensitive  CFL-reachability-based analysis
         CFLFSCS_WPA,	///< Flow-, context-, CFL-reachability-based analysis
         TypeCPP_WPA, ///<  Type-based analysis for C++
+        Andersen_INC, /// < Incremental Andersen PTA -- wjy
 
         // Demand driven analysis
         FieldS_DDA,		///< Field sensitive DDA

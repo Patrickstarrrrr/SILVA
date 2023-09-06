@@ -41,7 +41,8 @@ namespace SVF
 class AndersenBase;
 class SVFIR;
 class ConstraintGraph;
-
+class AndersenInc;
+class SConstraintGraph;
 /*!
  * Statistics of Andersen's analysis
  */
@@ -73,6 +74,43 @@ public:
     virtual void performStat();
 
     void collectCycleInfo(ConstraintGraph* consCG);
+
+    void statNullPtr();
+
+    void constraintGraphStat();
+};
+
+/*!
+ * Statistics of incremental Andersen's analysis
+ */
+class AndersenIncStat : public PTAStat
+{
+
+private:
+    AndersenInc* pta;
+
+public:
+    static const char* CollapseTime;
+
+    static u32_t _MaxPtsSize;
+    static u32_t _NumOfCycles;
+    static u32_t _NumOfPWCCycles;
+    static u32_t _NumOfNodesInCycles;
+    static u32_t _MaxNumOfNodesInSCC;
+    u32_t _NumOfNullPtr;
+    u32_t _NumOfConstantPtr;
+    u32_t _NumOfBlackholePtr;
+
+    AndersenIncStat(AndersenInc* p);
+
+    virtual ~AndersenIncStat()
+    {
+
+    }
+
+    virtual void performStat();
+
+    void collectCycleInfo(SConstraintGraph* consCG);
 
     void statNullPtr();
 

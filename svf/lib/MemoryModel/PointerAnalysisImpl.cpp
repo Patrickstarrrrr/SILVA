@@ -46,7 +46,7 @@ using namespace std;
 BVDataPTAImpl::BVDataPTAImpl(SVFIR* p, PointerAnalysis::PTATY type, bool alias_check) :
     PointerAnalysis(p, type, alias_check), ptCache()
 {
-    if (type == Andersen_BASE || type == Andersen_WPA || type == AndersenWaveDiff_WPA
+    if (type == Andersen_BASE || type == Andersen_WPA || type == AndersenWaveDiff_WPA || type == Andersen_INC 
             || type == TypeCPP_WPA || type == FlowS_DDA
             || type == AndersenSCD_WPA || type == AndersenSFR_WPA || type == CFLFICI_WPA || type == CFLFSCS_WPA)
     {

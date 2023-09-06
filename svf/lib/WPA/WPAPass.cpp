@@ -39,6 +39,7 @@
 #include "WPA/WPAPass.h"
 #include "WPA/Andersen.h"
 #include "WPA/AndersenPWC.h"
+#include "WPA/AndersenInc.h"
 #include "WPA/FlowSensitive.h"
 #include "WPA/VersionedFlowSensitive.h"
 #include "WPA/TypeAnalysis.h"
@@ -108,6 +109,9 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
         break;
     case PointerAnalysis::TypeCPP_WPA:
         _pta = new TypeAnalysis(pag);
+        break;
+    case PointerAnalysis::Andersen_INC:
+        _pta = new AndersenInc(pag);
         break;
     default:
         assert(false && "This pointer analysis has not been implemented yet.\n");

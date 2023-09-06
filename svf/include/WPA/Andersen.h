@@ -318,15 +318,15 @@ protected:
 
     /// Merge sub node in a SCC cycle to their rep node
     //@{
-    void mergeSccNodes(NodeID repNodeId, const NodeBS& subNodes);
-    void mergeSccCycle();
+    virtual void mergeSccNodes(NodeID repNodeId, const NodeBS& subNodes);
+    virtual void mergeSccCycle();
     //@}
     /// Collapse a field object into its base for field insensitive anlaysis
     //@{
     virtual void collapsePWCNode(NodeID nodeId);
-    void collapseFields();
-    bool collapseNodePts(NodeID nodeId);
-    bool collapseField(NodeID nodeId);
+    virtual void collapseFields();
+    virtual bool collapseNodePts(NodeID nodeId);
+    virtual bool collapseField(NodeID nodeId);
     //@}
 
     /// Updates subnodes of its rep, and rep node of its subs

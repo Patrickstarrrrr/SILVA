@@ -1,52 +1,20 @@
-//===- ConsG.h -- Constraint graph representation-----------------------------//
-//
-//                     SVF: Static Value-Flow Analysis
-//
-// Copyright (C) <2013-2017>  <Yulei Sui>
-//
 
-// This program is free software: you can redistribute it and/or modify
-// it under the terms of the GNU Affero General Public License as published by
-// the Free Software Foundation, either version 3 of the License, or
-// (at your option) any later version.
+#ifndef FLATCONSG_H_
+#define FLATCONSG_H_
 
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU Affero General Public License for more details.
+#include "Graphs/FlatConsGEdge.h"
+#include "Graphs/FlatConsGNode.h"
 
-// You should have received a copy of the GNU Affero General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
-//
-//===----------------------------------------------------------------------===//
-
-/*
- * ConstraintGraph.h
- *
- *  Created on: Oct 14, 2013
- *      Author: Yulei Sui
- */
-
-#ifndef CONSG_H_
-#define CONSG_H_
-
-#include "Graphs/ConsGEdge.h"
-#include "Graphs/ConsGNode.h"
 
 namespace SVF
 {
 
-/*!
- * Constraint graph for Andersen's analysis
- * ConstraintNodes are same as PAGNodes
- * ConstraintEdges are self-defined edges (initialized with ConstraintEdges)
- */
-class ConstraintGraph :  public GenericGraph<ConstraintNode,ConstraintEdge>
+class FConstraintGraph : public GenericGraph<FConstraintNode, FConstraintEdge>
 {
 
 public:
-    typedef OrderedMap<NodeID, ConstraintNode *> ConstraintNodeIDToNodeMapTy;
-    typedef ConstraintEdge::ConstraintEdgeSetTy::iterator ConstraintNodeIter;
+    typedef OrderedMap<NodeID, FConstraintNode *> FConstraintNodeIDToNodeMapTy;
+    typedef FConstraintEdge::FConstraintEdgeSetTy::iterator FConstraintNodeIter;
     typedef Map<NodeID, NodeID> NodeToRepMap;
     typedef Map<NodeID, NodeBS> NodeToSubsMap;
     typedef FIFOWorkList<NodeID> WorkList;
@@ -58,16 +26,16 @@ protected:
     WorkList nodesToBeCollapsed;
     EdgeID edgeIndex;
 
-    ConstraintEdge::ConstraintEdgeSetTy AddrCGEdgeSet;
-    ConstraintEdge::ConstraintEdgeSetTy directEdgeSet;
-    ConstraintEdge::ConstraintEdgeSetTy LoadCGEdgeSet;
-    ConstraintEdge::ConstraintEdgeSetTy StoreCGEdgeSet;
+    FConstraintEdge::FConstraintEdgeSetTy AddrFCGEdgeSet;
+    FConstraintEdge::FConstraintEdgeSetTy directFEdgeSet;
+    FConstraintEdge::FConstraintEdgeSetTy LoadFCGEdgeSet;
+    FConstraintEdge::FConstraintEdgeSetTy StoreFCGEdgeSet;
 
-    void buildCG();
+    void buildFCG();
 
     void destroy();
 
-    SVFStmt::SVFStmtSetTy& getPAGEdgeSet(SVFStmt::PEDGEK kind)
+    inline SVFStmt::SVFStmtSetTy& getPAGEdgeSet(SVFStmt::PEDGEK kind)
     {
         return pag->getPTASVFStmtSet(kind);
     }
@@ -92,79 +60,78 @@ protected:
 
 public:
     /// Constructor
-    ConstraintGraph(){}
-    ConstraintGraph(SVFIR* p): pag(p), edgeIndex(0)
+    FConstraintGraph(SVFIR* p): pag(p), edgeIndex(0)
     {
-        buildCG();
+        buildFCG();
     }
     /// Destructor
-    virtual ~ConstraintGraph()
+    virtual ~FConstraintGraph()
     {
         destroy();
     }
 
     /// Get/add/remove constraint node
     //@{
-    inline ConstraintNode* getConstraintNode(NodeID id) const
+    inline FConstraintNode* getFConstraintNode(NodeID id) const
     {
-        id = sccRepNode(id);
+        // id = sccRepNode(id);
         return getGNode(id);
     }
-    inline void addConstraintNode(ConstraintNode* node, NodeID id)
+    inline void addFConstraintNode(FConstraintNode* node, NodeID id)
     {
         addGNode(id,node);
     }
-    inline bool hasConstraintNode(NodeID id) const
+    inline bool hasFConstraintNode(NodeID id) const
     {
-        id = sccRepNode(id);
+        // id = sccRepNode(id);
         return hasGNode(id);
     }
-    inline void removeConstraintNode(ConstraintNode* node)
+    inline void removeFConstraintNode(FConstraintNode* node)
     {
         removeGNode(node);
     }
     //@}
 
     //// Return true if this edge exits
-    inline bool hasEdge(ConstraintNode* src, ConstraintNode* dst, ConstraintEdge::ConstraintEdgeK kind)
+    inline bool hasEdge(FConstraintNode* src, FConstraintNode* dst, FConstraintEdge::FConstraintEdgeK kind)
     {
-        ConstraintEdge edge(src,dst,kind);
-        if(kind == ConstraintEdge::Copy ||
-                kind == ConstraintEdge::NormalGep || kind == ConstraintEdge::VariantGep)
-            return directEdgeSet.find(&edge) != directEdgeSet.end();
-        else if(kind == ConstraintEdge::Addr)
-            return AddrCGEdgeSet.find(&edge) != AddrCGEdgeSet.end();
-        else if(kind == ConstraintEdge::Store)
-            return StoreCGEdgeSet.find(&edge) != StoreCGEdgeSet.end();
-        else if(kind == ConstraintEdge::Load)
-            return LoadCGEdgeSet.find(&edge) != LoadCGEdgeSet.end();
+        FConstraintEdge edge(src,dst,kind);
+        if(kind == FConstraintEdge::FCopy ||
+                kind == FConstraintEdge::FNormalGep || kind == FConstraintEdge::FVariantGep)
+            return directFEdgeSet.find(&edge) != directFEdgeSet.end();
+        else if(kind == FConstraintEdge::FAddr)
+            return AddrFCGEdgeSet.find(&edge) != AddrFCGEdgeSet.end();
+        else if(kind == FConstraintEdge::FStore)
+            return StoreFCGEdgeSet.find(&edge) != StoreFCGEdgeSet.end();
+        else if(kind == FConstraintEdge::FLoad)
+            return LoadFCGEdgeSet.find(&edge) != LoadFCGEdgeSet.end();
         else
             assert(false && "no other kind!");
         return false;
     }
 
     /// Get an edge via its src and dst nodes and kind
-    inline ConstraintEdge* getEdge(ConstraintNode* src, ConstraintNode* dst, ConstraintEdge::ConstraintEdgeK kind)
+    inline FConstraintEdge* getEdge(FConstraintNode* src, FConstraintNode* dst, FConstraintEdge::FConstraintEdgeK kind)
     {
-        ConstraintEdge edge(src,dst,kind);
-        if(kind == ConstraintEdge::Copy || kind == ConstraintEdge::NormalGep || kind == ConstraintEdge::VariantGep)
+        FConstraintEdge edge(src,dst,kind);
+        if(kind == FConstraintEdge::FCopy || kind == FConstraintEdge::FNormalGep || kind == FConstraintEdge::FVariantGep)
         {
-            auto eit = directEdgeSet.find(&edge);
+            auto eit = directFEdgeSet.find(&edge);
             return *eit;
         }
-        else if(kind == ConstraintEdge::Addr)
+        else if(kind == FConstraintEdge::FAddr)
         {
-            auto eit = AddrCGEdgeSet.find(&edge);
+            auto eit = AddrFCGEdgeSet.find(&edge);
             return *eit;
         }
-        else if(kind == ConstraintEdge::Store)
+        else if(kind == FConstraintEdge::FStore)
         {
-            auto eit = StoreCGEdgeSet.find(&edge);
+            auto eit = StoreFCGEdgeSet.find(&edge);
             return *eit;
         }
-        else if(kind == ConstraintEdge::Load)
+        else if(kind == FConstraintEdge::FLoad)
         {
-            auto eit = LoadCGEdgeSet.find(&edge);
+            auto eit = LoadFCGEdgeSet.find(&edge);
             return *eit;
         }
         else
@@ -177,56 +144,61 @@ public:
     ///Add a SVFIR edge into Edge map
     //@{
     /// Add Address edge
-    AddrCGEdge* addAddrCGEdge(NodeID src, NodeID dst);
+    AddrFCGEdge* addAddrFCGEdge(NodeID src, NodeID dst);
     /// Add Copy edge
-    CopyCGEdge* addCopyCGEdge(NodeID src, NodeID dst);
+    CopyFCGEdge* addCopyFCGEdge(NodeID src, NodeID dst, FConstraintEdge* complexEdge = nullptr);
     /// Add Gep edge
-    NormalGepCGEdge* addNormalGepCGEdge(NodeID src, NodeID dst, const AccessPath& ap);
-    VariantGepCGEdge* addVariantGepCGEdge(NodeID src, NodeID dst);
+    NormalGepFCGEdge* addNormalGepFCGEdge(NodeID src, NodeID dst, const AccessPath& ap);
+    VariantGepFCGEdge* addVariantGepFCGEdge(NodeID src, NodeID dst);
     /// Add Load edge
-    LoadCGEdge* addLoadCGEdge(NodeID src, NodeID dst);
+    LoadFCGEdge* addLoadFCGEdge(NodeID src, NodeID dst);
     /// Add Store edge
-    StoreCGEdge* addStoreCGEdge(NodeID src, NodeID dst);
+    StoreFCGEdge* addStoreFCGEdge(NodeID src, NodeID dst);
+    //@}
+
+    ///Try to remove a SVFIR edge from Edge map
+    //@{
+    CopyFCGEdge* removeCopyFCGEdgeByComplex(NodeID src, NodeID dst, FConstraintEdge* complexEdge = nullptr);
     //@}
 
     ///Get SVFIR edge
     //@{
     /// Get Address edges
-    inline ConstraintEdge::ConstraintEdgeSetTy& getAddrCGEdges()
+    inline FConstraintEdge::FConstraintEdgeSetTy& getAddrFCGEdges()
     {
-        return AddrCGEdgeSet;
+        return AddrFCGEdgeSet;
     }
     /// Get Copy/call/ret/gep edges
-    inline ConstraintEdge::ConstraintEdgeSetTy& getDirectCGEdges()
+    inline FConstraintEdge::FConstraintEdgeSetTy& getDirectFCGEdges()
     {
-        return directEdgeSet;
+        return directFEdgeSet;
     }
     /// Get Load edges
-    inline ConstraintEdge::ConstraintEdgeSetTy& getLoadCGEdges()
+    inline FConstraintEdge::FConstraintEdgeSetTy& getLoadFCGEdges()
     {
-        return LoadCGEdgeSet;
+        return LoadFCGEdgeSet;
     }
     /// Get Store edges
-    inline ConstraintEdge::ConstraintEdgeSetTy& getStoreCGEdges()
+    inline FConstraintEdge::FConstraintEdgeSetTy& getStoreFCGEdges()
     {
-        return StoreCGEdgeSet;
+        return StoreFCGEdgeSet;
     }
     //@}
 
     /// Used for cycle elimination
     //@{
-    /// Remove edge from old dst target, change edge dst id and add modifed edge into new dst
-    void reTargetDstOfEdge(ConstraintEdge* edge, ConstraintNode* newDstNode);
-    /// Remove edge from old src target, change edge dst id and add modifed edge into new src
-    void reTargetSrcOfEdge(ConstraintEdge* edge, ConstraintNode* newSrcNode);
+    // /// Remove edge from old dst target, change edge dst id and add modifed edge into new dst
+    // void reTargetDstOfEdge(FConstraintEdge* edge, FConstraintNode* newDstNode);
+    // /// Remove edge from old src target, change edge dst id and add modifed edge into new src
+    // void reTargetSrcOfEdge(FConstraintEdge* edge, FConstraintNode* newSrcNode);
     /// Remove addr edge from their src and dst edge sets
-    void removeAddrEdge(AddrCGEdge* edge);
+    void removeAddrEdge(AddrFCGEdge* edge);
     /// Remove direct edge from their src and dst edge sets
-    void removeDirectEdge(ConstraintEdge* edge);
+    void removeDirectEdge(FConstraintEdge* edge);
     /// Remove load edge from their src and dst edge sets
-    void removeLoadEdge(LoadCGEdge* edge);
+    void removeLoadEdge(LoadFCGEdge* edge);
     /// Remove store edge from their src and dst edge sets
-    void removeStoreEdge(StoreCGEdge* edge);
+    void removeStoreEdge(StoreFCGEdge* edge);
     //@}
 
     /// SCC rep/sub nodes methods
@@ -273,16 +245,16 @@ public:
     /// Move incoming direct edges of a sub node which is outside the SCC to its rep node
     /// Remove incoming direct edges of a sub node which is inside the SCC from its rep node
     /// Return TRUE if there's a gep edge inside this SCC (PWC).
-    bool moveInEdgesToRepNode(ConstraintNode*node, ConstraintNode* rep );
+    bool moveInEdgesToRepNode(FConstraintNode*node, FConstraintNode* rep );
 
     /// Move outgoing direct edges of a sub node which is outside the SCC to its rep node
     /// Remove outgoing direct edges of sub node which is inside the SCC from its rep node
     /// Return TRUE if there's a gep edge inside this SCC (PWC).
-    bool moveOutEdgesToRepNode(ConstraintNode*node, ConstraintNode* rep );
+    bool moveOutEdgesToRepNode(FConstraintNode*node, FConstraintNode* rep );
 
     /// Move incoming/outgoing direct edges of a sub node to its rep node
     /// Return TRUE if there's a gep edge inside this SCC (PWC).
-    inline bool moveEdgesToRepNode(ConstraintNode*node, ConstraintNode* rep )
+    inline bool moveEdgesToRepNode(FConstraintNode*node, FConstraintNode* rep )
     {
         bool gepIn = moveInEdgesToRepNode(node, rep);
         bool gepOut = moveOutEdgesToRepNode(node, rep);
@@ -290,10 +262,10 @@ public:
     }
 
     /// Check if a given edge is a NormalGepCGEdge with 0 offset.
-    inline bool isZeroOffsettedGepCGEdge(ConstraintEdge *edge) const
+    inline bool isZeroOffsettedGepFCGEdge(FConstraintEdge *edge) const
     {
-        if (NormalGepCGEdge *normalGepCGEdge = SVFUtil::dyn_cast<NormalGepCGEdge>(edge))
-            if (0 == normalGepCGEdge->getConstantFieldIdx())
+        if (NormalGepFCGEdge *normalGepFCGEdge = SVFUtil::dyn_cast<NormalGepFCGEdge>(edge))
+            if (0 == normalGepFCGEdge->getConstantFieldIdx())
                 return true;
         return false;
     }
@@ -328,10 +300,11 @@ public:
     /// Get a field of a memory object
     inline NodeID getGepObjVar(NodeID id, const APOffset& apOffset)
     {
+        /// TODO: Separate get and add
         NodeID gep =  pag->getGepObjVar(id, apOffset);
         /// Create a node when it is (1) not exist on graph and (2) not merged
-        if(sccRepNode(gep)==gep && hasConstraintNode(gep)==false)
-            addConstraintNode(new ConstraintNode(gep),gep);
+        if(sccRepNode(gep)==gep && hasFConstraintNode(gep)==false) /// TODO: sccRep 
+            addFConstraintNode(new FConstraintNode(gep),gep);
         return gep;
     }
     /// Get a field-insensitive node of a memory object
@@ -339,7 +312,7 @@ public:
     {
         NodeID fi = pag->getFIObjVar(id);
         /// The fi obj in PAG must be either an existing node or merged to another rep node in ConsG
-        assert((hasConstraintNode(fi) || sccRepNode(fi) != fi) && "non-existing fi obj??");
+        assert((hasFConstraintNode(fi) || sccRepNode(fi) != fi) && "non-existing fi obj??"); /// TODO: sccRep 
         return fi;
     }
     //@}
@@ -348,11 +321,11 @@ public:
     //@{
     inline bool isPWCNode(NodeID nodeId)
     {
-        return getConstraintNode(nodeId)->isPWCNode();
+        return getFConstraintNode(nodeId)->isPWCNode();
     }
     inline void setPWCNode(NodeID nodeId)
     {
-        getConstraintNode(nodeId)->setPWCNode();
+        getFConstraintNode(nodeId)->setPWCNode();
     }
     //@}
 
@@ -389,21 +362,21 @@ namespace SVF
  * GenericGraphTraits specializations for the generic graph algorithms.
  * Provide graph traits for traversing from a constraint node using standard graph traversals.
  */
-template<> struct GenericGraphTraits<SVF::ConstraintNode*> : public GenericGraphTraits<SVF::GenericNode<SVF::ConstraintNode,SVF::ConstraintEdge>*  >
+template<> struct GenericGraphTraits<SVF::FConstraintNode*> : public GenericGraphTraits<SVF::GenericNode<SVF::FConstraintNode,SVF::FConstraintEdge>*  >
 {
 };
 
 /// Inverse GenericGraphTraits specializations for Value flow node, it is used for inverse traversal.
 template<>
-struct GenericGraphTraits<Inverse<SVF::ConstraintNode *> > : public GenericGraphTraits<Inverse<SVF::GenericNode<SVF::ConstraintNode,SVF::ConstraintEdge>* > >
+struct GenericGraphTraits<Inverse<SVF::FConstraintNode *> > : public GenericGraphTraits<Inverse<SVF::GenericNode<SVF::FConstraintNode,SVF::FConstraintEdge>* > >
 {
 };
 
-template<> struct GenericGraphTraits<SVF::ConstraintGraph*> : public GenericGraphTraits<SVF::GenericGraph<SVF::ConstraintNode,SVF::ConstraintEdge>* >
+template<> struct GenericGraphTraits<SVF::FConstraintGraph*> : public GenericGraphTraits<SVF::GenericGraph<SVF::FConstraintNode,SVF::FConstraintEdge>* >
 {
-    typedef SVF::ConstraintNode *NodeRef;
+    typedef SVF::FConstraintNode *NodeRef;
 };
 
-} // End namespace llvm
+} // End namespace SVF
 
-#endif /* CONSG_H_ */
+#endif /* FLATCONSG_H_ */

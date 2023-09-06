@@ -805,6 +805,7 @@ OptionMultiple<PointerAnalysis::PTATY> Options::PASelected(
     {PointerAnalysis::FSSPARSE_WPA, "fspta", "Sparse flow sensitive pointer analysis"},
     {PointerAnalysis::VFS_WPA, "vfspta", "Versioned sparse flow-sensitive points-to analysis"},
     {PointerAnalysis::TypeCPP_WPA, "type", "Type-based fast analysis for Callgraph, SVFIR and CHA"},
+    {PointerAnalysis::Andersen_INC, "iander", "Incremental inclusion-based analysis"},
 }
 );
 

@@ -270,7 +270,7 @@ bool AndersenInc::processLoad(NodeID node, const SConstraintEdge* load)
     for (auto it = load->getFEdgeSet().begin(), eit = load->getFEdgeSet().end(); it != eit; ++it)
     {
         FConstraintEdge* fLoad = *it;
-        NodeID fsrc = fLoad->getSrcID();
+        NodeID fsrc = node;
         NodeID fdst = fLoad->getDstID();
         addnew |= addCopyEdgeByComplexEdge(fsrc, fdst, fLoad);
     }
@@ -301,7 +301,7 @@ bool AndersenInc::processStore(NodeID node, const SConstraintEdge* store)
     {
         FConstraintEdge* fStore = *it;
         NodeID fsrc = fStore->getSrcID();
-        NodeID fdst = fStore->getDstID();
+        NodeID fdst = node;
         addnew |= addCopyEdgeByComplexEdge(fsrc, fdst, fStore);
     }
     return addnew;
@@ -395,7 +395,8 @@ bool AndersenInc::processGepPts(const PointsTo& pts, const GepSCGEdge* edge)
                 tmpDstPts.set(o);
                 continue;
             }
-
+            // addGepObjVar for fCG firstly, then addGepObjVar for sCG
+            fCG->getGepObjVar(o,normalGepEdge->getAccessPath().getConstantFieldIdx());
             NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, normalGepEdge->getAccessPath().getConstantFieldIdx());
             tmpDstPts.set(fieldSrcPtdNode);
         }
@@ -697,6 +698,8 @@ void AndersenInc::heapAllocatorViaIndCall(CallSite cs, NodePairSet &cpySrcNodes)
         NodeID objNode = pag->addDummyObjNode(cs.getType());
         addPts(valNode,objNode);
         callsite2DummyValPN.insert(std::make_pair(cs,valNode));
+        fCG->addFConstraintNode(new FConstraintNode(valNode),valNode);
+        fCG->addFConstraintNode(new FConstraintNode(objNode),objNode);
         sCG->addSConstraintNode(new SConstraintNode(valNode),valNode);
         sCG->addSConstraintNode(new SConstraintNode(objNode),objNode);
         srcret = valNode;

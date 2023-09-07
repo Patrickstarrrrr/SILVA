@@ -303,7 +303,8 @@ public:
         /// TODO: Separate get and add
         NodeID gep =  pag->getGepObjVar(id, apOffset);
         /// Create a node when it is (1) not exist on graph and (2) not merged
-        if(sccRepNode(gep)==gep && hasFConstraintNode(gep)==false) /// TODO: sccRep 
+        // if(sccRepNode(gep)==gep && hasFConstraintNode(gep)==false) /// TODO: sccRep 
+        if(hasFConstraintNode(gep)==false) /// TODO: sccRep 
             addFConstraintNode(new FConstraintNode(gep),gep);
         return gep;
     }

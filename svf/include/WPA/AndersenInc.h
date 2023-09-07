@@ -124,15 +124,36 @@ public:
     /// Operation of points-to set
     virtual inline const PointsTo& getPts(NodeID id)
     {
+        if (sccRepNode(id) == 428979)
+        {
+            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
+            {
+                t = t;
+            }
+        }
         return getPTDataTy()->getPts(sccRepNode(id));
     }
     virtual inline bool unionPts(NodeID id, const PointsTo& target)
     {
+        if (sccRepNode(id) == 428979)
+        {
+            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
+            {
+                t = t;
+            }
+        }
         id = sccRepNode(id);
         return getPTDataTy()->unionPts(id, target);
     }
     virtual inline bool unionPts(NodeID id, NodeID ptd)
     {
+        if (sccRepNode(id) == 428979)
+        {
+            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
+            {
+                t = t;
+            }
+        }
         id = sccRepNode(id);
         ptd = sccRepNode(ptd);
         return getPTDataTy()->unionPts(id,ptd);

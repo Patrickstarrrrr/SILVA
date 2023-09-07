@@ -308,26 +308,26 @@ void AndersenIncStat::performStat()
     constraintGraphStat();
 
     timeStatMap["TotalTime"] = (endTime - startTime)/TIMEINTERVAL;
-    timeStatMap["SCCDetectTime"] = Andersen::timeOfSCCDetection;
-    timeStatMap["SCCMergeTime"] =  Andersen::timeOfSCCMerges;
-    timeStatMap[CollapseTime] =  Andersen::timeOfCollapse;
+    timeStatMap["SCCDetectTime"] = AndersenInc::timeOfSCCDetection;
+    timeStatMap["SCCMergeTime"] =  AndersenInc::timeOfSCCMerges;
+    timeStatMap[CollapseTime] =  AndersenInc::timeOfCollapse;
 
-    timeStatMap["LoadStoreTime"] =  Andersen::timeOfProcessLoadStore;
-    timeStatMap["CopyGepTime"] =  Andersen::timeOfProcessCopyGep;
-    timeStatMap["UpdateCGTime"] =  Andersen::timeOfUpdateCallGraph;
+    timeStatMap["LoadStoreTime"] =  AndersenInc::timeOfProcessLoadStore;
+    timeStatMap["CopyGepTime"] =  AndersenInc::timeOfProcessCopyGep;
+    timeStatMap["UpdateCGTime"] =  AndersenInc::timeOfUpdateCallGraph;
 
     PTNumStatMap["TotalPointers"] = pag->getValueNodeNum() + pag->getFieldValNodeNum();
     PTNumStatMap["TotalObjects"] = pag->getObjectNodeNum() + pag->getFieldObjNodeNum();
 
 
-    PTNumStatMap["AddrProcessed"] = Andersen::numOfProcessedAddr;
-    PTNumStatMap["CopyProcessed"] = Andersen::numOfProcessedCopy;
-    PTNumStatMap["GepProcessed"] = Andersen::numOfProcessedGep;
-    PTNumStatMap["LoadProcessed"] = Andersen::numOfProcessedLoad;
-    PTNumStatMap["StoreProcessed"] = Andersen::numOfProcessedStore;
+    PTNumStatMap["AddrProcessed"] = AndersenInc::numOfProcessedAddr;
+    PTNumStatMap["CopyProcessed"] = AndersenInc::numOfProcessedCopy;
+    PTNumStatMap["GepProcessed"] = AndersenInc::numOfProcessedGep;
+    PTNumStatMap["LoadProcessed"] = AndersenInc::numOfProcessedLoad;
+    PTNumStatMap["StoreProcessed"] = AndersenInc::numOfProcessedStore;
 
-    PTNumStatMap["NumOfSFRs"] = Andersen::numOfSfrs;
-    PTNumStatMap["NumOfFieldExpand"] = Andersen::numOfFieldExpand;
+    PTNumStatMap["NumOfSFRs"] = AndersenInc::numOfSfrs;
+    PTNumStatMap["NumOfFieldExpand"] = AndersenInc::numOfFieldExpand;
 
     PTNumStatMap["Pointers"] = pag->getValueNodeNum();
     PTNumStatMap["MemObjects"] = pag->getObjectNodeNum();
@@ -344,7 +344,7 @@ void AndersenIncStat::performStat()
     PTNumStatMap["IndCallSites"] = consCG->getIndirectCallsites().size();
     PTNumStatMap["IndEdgeSolved"] = pta->getNumOfResolvedIndCallEdge();
 
-    PTNumStatMap["NumOfSCCDetect"] = Andersen::numOfSCCDetection;
+    PTNumStatMap["NumOfSCCDetect"] = AndersenInc::numOfSCCDetection;
     PTNumStatMap["TotalCycleNum"] = _NumOfCycles;
     PTNumStatMap["TotalPWCCycleNum"] = _NumOfPWCCycles;
     PTNumStatMap["NodesInCycles"] = _NumOfNodesInCycles;

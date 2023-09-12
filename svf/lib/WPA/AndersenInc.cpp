@@ -1061,5 +1061,38 @@ void AndersenInc::processStoreRemoval(NodeID srcid, NodeID dstid)
     if (sStore->getFEdgeSet().empty()) {
         sCG->removeStoreEdge(SVFUtil::dyn_cast<StoreSCGEdge>(sStore));
     }
+
     fCG->removeStoreEdge(SVFUtil::dyn_cast<StoreFCGEdge>(fStore));
+}
+
+/*
+ * s --Addr--> d
+ * pts(d) = pts(d) \Union {s}
+ */
+void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sAddr = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SAddr);
+
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fAddr = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FAddr);
+
+    sAddr->removeFEdge(fAddr);
+    if (sAddr->getFEdgeSet().empty()) {
+        sCG->removeAddrEdge(SVFUtil::dyn_cast<AddrSCGEdge>(sAddr));
+    }
+    
+    fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
+
+    PointsTo srcSet;
+    srcSet.set(srcid);
+    propagateDelPts(srcSet, dstid);
+}
+
+// TODO: --wjy
+void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID node)
+{
+    return ;
 }

@@ -332,6 +332,8 @@ private:
     void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
     void processLoadRemoval(NodeID srcid, NodeID dstid);
     void processStoreRemoval(NodeID srcid, NodeID dstid);
+    void processAddrRemoval(NodeID srcid, NodeID dstid);
+    void propagateDelPts(const PointsTo& pts, NodeID node);
 
     //@}
 
@@ -350,6 +352,6 @@ private:
 // 1. SCC ReDetect When Restore
 // 2. Direct Edge Removal
 // 3. Load/Store Edge Removal ------- Done 9.12
-// 4. Addr Edge Removal
+// 4. Addr Edge Removal ------------- Done 9.12
 // 5. Propagate Deletion Pts Change
 // 6. Process Function Pointer

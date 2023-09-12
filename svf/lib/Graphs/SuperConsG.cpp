@@ -172,20 +172,20 @@ AddrSCGEdge* SConstraintGraph::removeAddrSCGEdgeByFlat(NodeID src, NodeID dst)
     SConstraintNode* dstNode = getSConstraintNode(dst);
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
+
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FAddr);
-    if (!hasEdge(srcNode, dstNode, SConstraintEdge::SAddr)) {
-        // add flat edge
-        return nullptr;
-    }
     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SAddr);
-    AddrSCGEdge* addr = SVFUtil::dyn_cast<AddrSCGEdge>(sEdge);
+
+    AddrSCGEdge* sAddr = SVFUtil::dyn_cast<AddrSCGEdge>(sEdge);
+    AddrFCGEdge* fAddr = SVFUtil::dyn_cast<AddrFCGEdge>(fEdge);
     sEdge->removeFEdge(fEdge);
+    fConsG->removeAddrEdge(fAddr);
     if (sEdge->getFEdgeSet().size() == 0)
     {
-        removeAddrEdge(addr);
+        removeAddrEdge(sAddr);
         return nullptr;
     }
-    return addr;
+    return sAddr;
 }
 
 /*!
@@ -221,31 +221,40 @@ CopySCGEdge* SConstraintGraph::addCopySCGEdge(NodeID src, NodeID dst)
 /*!
  * Remove a copy edge
  */
-CopySCGEdge* SConstraintGraph::removeCopySCGEdgeByFlat(NodeID src, NodeID dst)
+unsigned SConstraintGraph::removeCopySCGEdgeByFlat(NodeID src, NodeID dst) // TODO: --wjy
 {
     SConstraintNode* srcNode = getSConstraintNode(src);
     SConstraintNode* dstNode = getSConstraintNode(dst);
     if (srcNode == dstNode)
     {
         // edgeInSCC todo
-        sccBreakDetect(src, dst, FConstraintEdge::FCopy);
+        unsigned flag = sccBreakDetect(src, dst, FConstraintEdge::FCopy);
+        if (flag == 0) {
+            // SCC Restore: edge to be removed is still in fCG and sCG
+            // TODO: after redetect sub SCC, edge should be removed
+            return 1;
+        }
+        else if (flag == 1) {
+            // SCC Keep: edge has been removed from both fCG and sCG
+            return 0;
+        }
     }
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
+
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
-    if (!hasEdge(srcNode, dstNode, SConstraintEdge::SCopy)) {
-        // add flat edge
-        return nullptr;
-    }
     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SCopy);
+
     CopySCGEdge* copy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
     sEdge->removeFEdge(fEdge);
+    // fEdge-> 
     if (sEdge->getFEdgeSet().size() == 0)
     {
         // TODO: scc detect
-        return nullptr;
+        return 1;
     }
-    return copy;
+    // return copy;
+    return 0;
 }
 
 /*!
@@ -394,20 +403,26 @@ LoadSCGEdge* SConstraintGraph::removeLoadSCGEdgeByFlat(NodeID src, NodeID dst)
     SConstraintNode* dstNode = getSConstraintNode(dst);
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
+
+    // if (!fConsG->hasEdge(fSrcNode, fDstNode, FConstraintEdge::FLoad)) {
+    //     return nullptr;
+    // }
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FLoad);
-    if (!hasEdge(srcNode, dstNode, SConstraintEdge::SLoad)) {
-        // add flat edge
-        return nullptr;
-    }
+    // if (!hasEdge(srcNode, dstNode, SConstraintEdge::SLoad)) {
+    //     return nullptr;
+    // }
     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SLoad);
-    LoadSCGEdge* load = SVFUtil::dyn_cast<LoadSCGEdge>(sEdge);
-    sEdge->removeFEdge(fEdge);
+
+    LoadSCGEdge* sLoad = SVFUtil::dyn_cast<LoadSCGEdge>(sEdge);
+    LoadFCGEdge* fLoad = SVFUtil::dyn_cast<LoadFCGEdge>(fEdge);
+    sEdge->removeFEdge(fEdge); // remove fEdge from sEdge's fEdgeSet
+    fConsG->removeLoadEdge(fLoad); // remove fEdge from fCG
     if (sEdge->getFEdgeSet().size() == 0)
-    {
-        removeLoadEdge(load);
+    {   // if sEdge's fEdgeSet is empty, remove sEdge from sCG
+        removeLoadEdge(sLoad);
         return nullptr;
     }
-    return load;
+    return sLoad;
 }
 
 /*!
@@ -447,20 +462,20 @@ StoreSCGEdge* SConstraintGraph::removeStoreSCGEdgeByFlat(NodeID src, NodeID dst)
     SConstraintNode* dstNode = getSConstraintNode(dst);
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
+
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FStore);
-    if (!hasEdge(srcNode, dstNode, SConstraintEdge::SStore)) {
-        // add flat edge
-        return nullptr;
-    }
     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SStore);
-    StoreSCGEdge* store = SVFUtil::dyn_cast<StoreSCGEdge>(sEdge);
+
+    StoreSCGEdge* sStore = SVFUtil::dyn_cast<StoreSCGEdge>(sEdge);
+    StoreFCGEdge* fStore = SVFUtil::dyn_cast<StoreFCGEdge>(fEdge);
     sEdge->removeFEdge(fEdge);
+    fConsG->removeStoreEdge(fStore);
     if (sEdge->getFEdgeSet().size() == 0)
     {
-        removeStoreEdge(store);
+        removeStoreEdge(sStore);
         return nullptr;
     }
-    return store;
+    return sStore;
 }
 
 AddrSCGEdge* SConstraintGraph::retargetAddrSCGEdge(AddrSCGEdge* oldSEdge, NodeID src, NodeID dst)
@@ -807,11 +822,11 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
     d.find();
     delete tempG;
     if (d.topoNodeStack().size() > 1) {
+        // TODO: ReDetect the sub scc --wjy
         // SCC broken
         sccRestore(rep);
-
-        
-
+        // NOTE: The edge to be removed is still in fCG and SCG ! 
+        return SCC_RESTORE;    
     }
     else {
         // SCC keep
@@ -820,7 +835,9 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
         FConstraintNode* srcFNode = fConsG->getFConstraintNode(src);
         FConstraintNode* dstFNode = fConsG->getFConstraintNode(dst);
         FConstraintEdge* fEdge = fConsG->getEdge(srcFNode, dstFNode, kind);
+        // NOTE: remove the edge in both fCG and SCG;
         sEdge->removeFEdge(fEdge);
+        fConsG->removeDirectEdge(fEdge);
         return SCC_KEEP;
     }
     

@@ -6,7 +6,27 @@
 #include "Graphs/FlatConsG.h"
 
 namespace SVF{
-
+// class SDK 
+// {
+//     NodeID src;
+//     NodeID dst;
+//     FConstraintEdge::FConstraintEdgeK kind;
+//     LocationSet ls;
+//     SrcDstKind(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k)
+//     {
+//         src = s;
+//         dst = d;
+//         kind = k;
+//     }
+//     SrcDstKind(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, LocationSet _ls)
+//     {
+//         src = s;
+//         dst = d;
+//         kind = k;
+//         ls = _ls;
+//     }
+//     ~SrcDstKind(){}
+// };
 
 // class AndersenInc : public AndersenWaveDiff
 typedef WPASolver<SConstraintGraph*> WPASConstraintSolver;
@@ -124,36 +144,15 @@ public:
     /// Operation of points-to set
     virtual inline const PointsTo& getPts(NodeID id)
     {
-        if (sccRepNode(id) == 428979)
-        {
-            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
-            {
-                t = t;
-            }
-        }
         return getPTDataTy()->getPts(sccRepNode(id));
     }
     virtual inline bool unionPts(NodeID id, const PointsTo& target)
     {
-        if (sccRepNode(id) == 428979)
-        {
-            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
-            {
-                t = t;
-            }
-        }
         id = sccRepNode(id);
         return getPTDataTy()->unionPts(id, target);
     }
     virtual inline bool unionPts(NodeID id, NodeID ptd)
     {
-        if (sccRepNode(id) == 428979)
-        {
-            for (NodeID t: getPTDataTy()->getPts(sccRepNode(id)))
-            {
-                t = t;
-            }
-        }
         id = sccRepNode(id);
         ptd = sccRepNode(ptd);
         return getPTDataTy()->unionPts(id,ptd);
@@ -303,8 +302,54 @@ public:
     virtual bool handleStore(NodeID id, const SConstraintEdge* store);/// TODO: --wjy
     virtual bool addCopyEdgeByComplexEdge(NodeID fsrc, NodeID fdst, FConstraintEdge* complexEdge);
 
+// Incremental API
+public:
+    // typedef std::set<const llvm::Instruction*> InstructionSetTy;
+    // typedef std::set<const llvm::Function*> FunctionSetTy;
+
+    struct PtsDiff 
+    {
+        NodeID nodeId;
+        PointsTo prePts;
+        PointsTo nowPts;
+        PointsTo insPts;
+        PointsTo delPts;
+    };
+    typedef std::unordered_map<NodeID, PtsDiff *> PtsDiffMap;
+
+private:
+    // std::vector<SrcDstKind *> delEdgesVec;  // deleted constraintEdges:(src, dst, edgeKind)
+    // std::vector<SrcDstKind *> insEdgesVec;  // inserted constraintEdges
+    FIFOWorkList<FConstraintEdge *> delEdgesWL;
+    FIFOWorkList<FConstraintEdge *> insEdgesWL;
+public:
+    bool pushIntoDelEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+    bool pushIntoInsEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+private:
+    /// handling deletion
+    //@{
+    void processDeletion();
+    void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
+    void processLoadRemoval(NodeID srcid, NodeID dstid);
+    void processStoreRemoval(NodeID srcid, NodeID dstid);
+
+    //@}
+
+    // void processInsertion();
+    
+
 }; // End class AndersenInc
 
 } // End namespace SVF
 
 #endif /*INCLUDE_WPA_ANDERSENINC_H_*/
+
+
+// TODOLIST 2023.9.11 --wjy
+// 0. Set type WL for edges --------- Done 9.12
+// 1. SCC ReDetect When Restore
+// 2. Direct Edge Removal
+// 3. Load/Store Edge Removal ------- Done 9.12
+// 4. Addr Edge Removal
+// 5. Propagate Deletion Pts Change
+// 6. Process Function Pointer

@@ -961,3 +961,105 @@ bool AndersenInc::handleStore(NodeID nodeId, const SConstraintEdge* edge)
     }
     return changed;
 }
+
+
+bool AndersenInc::pushIntoDelEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)
+{
+    FConstraintNode* srcNode = fCG->getFConstraintNode(src);
+    FConstraintNode* dstNode = fCG->getFConstraintNode(dst);
+    if (fCG->hasEdge(srcNode, dstNode, kind)) {
+        FConstraintEdge* edge = fCG->getEdge(srcNode, dstNode, kind);
+        delEdgesWL.push(edge);
+        return true;
+    }
+    return false;
+}
+
+bool AndersenInc::pushIntoInsEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)
+{
+    FConstraintNode* srcNode = fCG->getFConstraintNode(src);
+    FConstraintNode* dstNode = fCG->getFConstraintNode(dst);
+    if (fCG->hasEdge(srcNode, dstNode, kind)) {
+        FConstraintEdge* edge = fCG->getEdge(srcNode, dstNode, kind);
+        insEdgesWL.push(edge);
+        return true;
+    }
+    return false;
+}
+
+/*
+ * srcid --Load--> dstid
+ * for o in pts(srcid):
+ *     o --Copy--> dstid
+ */
+void AndersenInc::processLoadRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sLoad = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SLoad);
+
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fLoad = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FLoad);
+
+    // 1. Process copy edge with this complex load constraint.
+    const PointsTo& srcPts = getPts(srcid);
+    for (NodeID o: srcPts) {
+        if (pag->isConstantObj(o) || isNonPointerObj(o))
+            continue;
+        FConstraintNode* fONode = fCG->getFConstraintNode(o);
+        FConstraintEdge* fEdge = fCG->getEdge(fONode, fDstNode, FConstraintEdge::FCopy);
+        CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+        fCopy->removeComplexEdge(fLoad);
+        if (fCopy->getComplexEdgeSet().empty()) {
+            // fCopy need to be removed
+            pushIntoDelEdgesWL(o, dstid, FConstraintEdge::FCopy);
+        }
+    }
+
+    // 2. Process fedge set of the sedge which this fedge retargeted to.
+    sLoad->removeFEdge(fLoad);
+    if (sLoad->getFEdgeSet().empty()) {
+        sCG->removeLoadEdge(SVFUtil::dyn_cast<LoadSCGEdge>(sLoad));
+    }
+
+    // 3. process fedges removal
+    fCG->removeLoadEdge(SVFUtil::dyn_cast<LoadFCGEdge>(fLoad));
+}
+
+/*
+ * srcid --Store--> dstid
+ * for o in pts(dstid):
+ *     srcid --Copy--> o
+ */
+void AndersenInc::processStoreRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sStore = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SStore);
+
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fStore = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FStore);
+
+    const PointsTo& dstPts = getPts(dstid);
+
+    for (NodeID o: dstPts) {
+        if (pag->isConstantObj(o) || isNonPointerObj(o))
+            continue;
+        FConstraintNode* fONode = fCG->getFConstraintNode(o);
+        FConstraintEdge* fEdge = fCG->getEdge(fSrcNode, fONode, FConstraintEdge::FCopy);
+        CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+        fCopy->removeComplexEdge(fStore);
+        if (fCopy->getComplexEdgeSet().empty()) {
+            // fCopy need to be removed
+            pushIntoDelEdgesWL(srcid, o, FConstraintEdge::FCopy);
+        }
+    }
+
+    sStore->removeFEdge(fStore);
+    if (sStore->getFEdgeSet().empty()) {
+        sCG->removeStoreEdge(SVFUtil::dyn_cast<StoreSCGEdge>(sStore));
+    }
+    fCG->removeStoreEdge(SVFUtil::dyn_cast<StoreFCGEdge>(fStore));
+}

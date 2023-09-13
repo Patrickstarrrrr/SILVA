@@ -1091,6 +1091,172 @@ void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
     propagateDelPts(srcSet, dstid);
 }
 
+/*
+ * s --Copy--> d
+ * pts(d) = pts(d) \Union pts(s)
+ */
+void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    if (sSrcNode == sDstNode) {
+        // Copy Edge in SCC
+        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FCopy) == 1) {
+            // SCC KEEP
+            // SCC KEEP should remove the fEdge
+            return;
+        }
+        // SCC Restore
+        // SCC Restore should remove the fEdge and sEdge
+        propagateDelPts(getPts(srcid), dstid);
+    }
+    else {
+        SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
+        FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+        FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+        FConstraintEdge* fCopy = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+
+        // 
+        sCopy->removeFEdge(fCopy);
+        if (sCopy->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sCopy);
+            propagateDelPts(getPts(sSrcNode->getId()), sDstNode->getId());
+        }
+
+        fCG->removeDirectEdge(fCopy);
+    }
+}
+
+/*
+ * s --VGep--> d
+ * pts(d) = pts(d) \Union FI(pts(s))
+ */
+void AndersenInc::processVariantGepRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    PointsTo tmpDstPts;
+    if (sSrcNode == sDstNode) {
+        // VGep Edge in SCC
+        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FVariantGep) == 1) {
+            // SCC KEEP
+            // SCC KEEP should remove the fEdge
+            return;
+        }
+        // SCC Restore
+        // SCC Restore should remove the fEdge and sEdge
+
+        // VGep Constraint
+        for (NodeID o: getPts(srcid)) {
+            if (sCG->isBlkObjOrConstantObj(o))
+            {
+                tmpDstPts.set(o);
+                continue;
+            }
+
+            // if (!isFieldInsensitive(o))
+            // {
+            //     setObjFieldInsensitive(o);
+            //     sCG->addNodeToBeCollapsed(sCG->getBaseObjVar(o));
+            // }
+
+            // Add the field-insensitive node into pts.
+            NodeID baseId = sCG->getFIObjVar(o);
+            tmpDstPts.set(baseId);
+        }
+        propagateDelPts(tmpDstPts, dstid);
+    }
+    else {
+        SConstraintEdge* sVGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SVariantGep);
+        FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+        FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+        FConstraintEdge* fVGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FVariantGep);
+
+        // 
+        sVGep->removeFEdge(fVGep);
+        if (sVGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sVGep);
+            // VGep Constraint
+            for (NodeID o: getPts(sSrcNode->getId())) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                {
+                    tmpDstPts.set(o);
+                    continue;
+                }
+                // About isFieldInsensitive?
+                // Add the field-insensitive node into pts.
+                NodeID baseId = sCG->getFIObjVar(o);
+                tmpDstPts.set(baseId);
+            }
+            propagateDelPts(tmpDstPts, sDstNode->getId());
+        }
+
+        fCG->removeDirectEdge(fVGep);
+    }
+}
+
+/*
+ * s --NGep: ap--> d
+ * pts(d) = pts(d) \Union AP(pts(s))
+ */
+void AndersenInc::processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    PointsTo tmpDstPts;
+    if (sSrcNode == sDstNode) {
+        // NGep Edge in SCC
+        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FNormalGep) == 1) {
+            // SCC KEEP
+            // SCC KEEP should remove the fEdge
+            return;
+        }
+        // SCC Restore
+        // SCC Restore should remove the fEdge and sEdge
+
+        // NGep Constraint
+        for (NodeID o : getPts(srcid))
+        {
+            if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+            {
+                tmpDstPts.set(o);
+                continue;
+            }
+            NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+            tmpDstPts.set(fieldSrcPtdNode);
+        }
+
+        propagateDelPts(tmpDstPts, dstid);
+    }
+    else {
+        SConstraintEdge* sNGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SNormalGep);
+        FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+        FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+        FConstraintEdge* fNGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FNormalGep);
+
+        // 
+        sNGep->removeFEdge(fNGep);
+        if (sNGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sNGep);
+            // NGep Constraint
+            for (NodeID o : getPts(sSrcNode->getId()))
+            {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                {
+                    tmpDstPts.set(o);
+                    continue;
+                }
+                NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                tmpDstPts.set(fieldSrcPtdNode);
+            }
+
+            propagateDelPts(tmpDstPts, sDstNode->getId());
+        }
+
+        fCG->removeDirectEdge(fNGep);
+    }
+}
+
 // TODO: --wjy
 void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID node)
 {

@@ -381,7 +381,7 @@ GepStmt* SVFIR::addVariantGepStmt(NodeID src, NodeID dst, const AccessPath& ap)
 
 /*!
  * Add a temp field value node, this method can only invoked by getGepValVar
- * due to constaint expression, curInst is used to distinguish different instructions (e.g., memorycpy) when creating GepValVar.
+ * due to constraint expression, curInst is used to distinguish different instructions (e.g., memorycpy) when creating GepValVar.
  */
 NodeID SVFIR::addGepValNode(const SVFValue* curInst,const SVFValue* gepVal, const AccessPath& ap, NodeID i, const SVFType* type)
 {
@@ -434,7 +434,10 @@ NodeID SVFIR::getGepObjVar(const MemObj* obj, const APOffset& apOffset)
 
     NodeOffsetMap::iterator iter = GepObjVarMap.find(std::make_pair(base, newLS));
     if (iter == GepObjVarMap.end())
-        return addGepObjNode(obj, newLS);
+    {
+        NodeID gepId = NodeIDAllocator::get()->allocateGepObjectId(base, apOffset, Options::MaxFieldLimit());
+        return addGepObjNode(obj, newLS,gepId);
+    }
     else
         return iter->second;
 
@@ -443,14 +446,13 @@ NodeID SVFIR::getGepObjVar(const MemObj* obj, const APOffset& apOffset)
 /*!
  * Add a field obj node, this method can only invoked by getGepObjVar
  */
-NodeID SVFIR::addGepObjNode(const MemObj* obj, const APOffset& apOffset)
+NodeID SVFIR::addGepObjNode(const MemObj* obj, const APOffset& apOffset, const NodeID gepId)
 {
     //assert(findPAGNode(i) == false && "this node should not be created before");
     NodeID base = obj->getId();
     assert(0==GepObjVarMap.count(std::make_pair(base, apOffset))
            && "this node should not be created before");
 
-    NodeID gepId = NodeIDAllocator::get()->allocateGepObjectId(base, apOffset, Options::MaxFieldLimit());
     GepObjVarMap[std::make_pair(base, apOffset)] = gepId;
     GepObjVar *node = new GepObjVar(obj, gepId, apOffset);
     memToFieldsMap[base].set(gepId);
@@ -533,7 +535,7 @@ NodeID SVFIR::getBaseValVar(NodeID nodeId)
 }
 
 /*!
- * It is used to create a dummy GepValVar during global initiailzation.
+ * It is used to create a dummy GepValVar during global initialization.
  */
 NodeID SVFIR::getGepValVar(const SVFValue* curInst, NodeID base, const AccessPath& ap) const
 {
@@ -693,7 +695,7 @@ bool SVFIR::isNonPointerObj(NodeID id) const
     }
 }
 /*
- * If this is a dummy node or node does not have incoming edges and outcoming edges we assume it is not a pointer here.
+ * If this is a dummy node or node does not have incoming edges and outgoing edges we assume it is not a pointer here.
  * However, if it is a pointer and it is an argument of a function definition, we assume it is a pointer here.
  */
 bool SVFIR::isValidPointer(NodeID nodeId) const

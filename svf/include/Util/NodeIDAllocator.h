@@ -82,6 +82,12 @@ public:
         return numObjects;
     }
 
+    inline void increaseNumOfObjAndNodes()
+    {
+        ++numObjects;
+        ++numNodes;
+    }
+
 private:
     /// Builds a node ID allocator with the strategy specified on the command line.
     NodeIDAllocator(void);
@@ -184,7 +190,7 @@ public:
         /// x in pt(p) and y in pt(p) -> x is reachable from y.
         static inline std::vector<unsigned> regionObjects(const Map<NodeID, Set<NodeID>> &graph, size_t numObjects, size_t &numLabels);
 
-        // From all the candidates, returns the best mapping for pointsToSets (points-to set -> # occurences).
+        // From all the candidates, returns the best mapping for pointsToSets (points-to set -> # occurrences).
         static inline std::pair<hclust_fast_methods, std::vector<NodeID>> determineBestMapping(
                     const std::vector<std::pair<hclust_fast_methods, std::vector<NodeID>>> &candidates,
                     Map<PointsTo, unsigned> pointsToSets, const std::string &evalSubtitle, double &evalTime);

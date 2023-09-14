@@ -57,7 +57,7 @@ bool AccessPath::isConstantOffset() const
 }
 
 /// Return element number of a type
-/// (1) StructType or Array, return flatterned number elements.
+/// (1) StructType or Array, return flattened number elements.
 /// (2) PointerType, return the element number of the pointee
 /// (3) non-pointer SingleValueType, return 1
 u32_t AccessPath::getElementNum(const SVFType* type) const
@@ -69,7 +69,7 @@ u32_t AccessPath::getElementNum(const SVFType* type) const
     }
     else if (type->isSingleValueType())
     {
-        /// This is a pointer arithmic
+        /// This is a pointer arithmetic
         if(const SVFPointerType* pty = SVFUtil::dyn_cast<SVFPointerType>(type))
             return getElementNum(pty->getPtrElementType());
         else
@@ -85,6 +85,45 @@ u32_t AccessPath::getElementNum(const SVFType* type) const
         assert(false && "What other types for this gep?");
         abort();
     }
+}
+
+/// Return accumulated constant offset
+///
+/// "value" is the offset variable (must be a constant)
+/// "type" is the location where we want to compute offset
+/// Given a vector and elem byte size: [(value1,type1), (value2,type2), (value3,type3)], bytesize
+/// totalConstByteOffset = ByteOffset(value1,type1) * ByteOffset(value2,type2) + ByteOffset(value3,type3)
+/// For a pointer type (e.g., t1 is PointerType), we will retrieve the pointee type and times the offset, i.e., getElementNum(t1) X off1
+APOffset AccessPath::computeConstantByteOffset(u32_t elemBytesize) const
+{
+    assert(isConstantOffset() && "not a constant offset");
+
+    if(offsetVarAndGepTypePairs.empty())
+        return getConstantFieldIdx() * elemBytesize;
+
+    APOffset totalConstOffset = 0;
+    for(int i = offsetVarAndGepTypePairs.size() - 1; i >= 0; i--)
+    {
+        const SVFValue* value = offsetVarAndGepTypePairs[i].first->getValue();
+        const SVFType* type = offsetVarAndGepTypePairs[i].second;
+        const SVFConstantInt* op = SVFUtil::dyn_cast<SVFConstantInt>(value);
+        assert(op && "not a constant offset?");
+        if(type==nullptr)
+        {
+            totalConstOffset += op->getSExtValue() * elemBytesize;
+            continue;
+        }
+
+        if(const SVFPointerType* pty = SVFUtil::dyn_cast<SVFPointerType>(type))
+            totalConstOffset += op->getSExtValue() * getElementNum(pty->getPtrElementType()) * elemBytesize;
+        else
+        {
+            APOffset offset = op->getSExtValue();
+            // if getByteOffset is false, it will retrieve flatten idx
+            totalConstOffset += offset * elemBytesize;
+        }
+    }
+    return totalConstOffset;
 }
 
 /// Return accumulated constant offset
@@ -141,8 +180,15 @@ APOffset AccessPath::computeConstantOffset() const
         else
         {
             APOffset offset = op->getSExtValue();
-            u32_t flattenOffset = SymbolTableInfo::SymbolInfo()->getFlattenedElemIdx(type, offset);
-            totalConstOffset += flattenOffset;
+            if (offset >= 0)
+            {
+                u32_t flattenOffset =
+                    SymbolTableInfo::SymbolInfo()->getFlattenedElemIdx(type,
+                            offset);
+                totalConstOffset += flattenOffset;
+            }
+            else
+                totalConstOffset += offset;
         }
     }
     return totalConstOffset;

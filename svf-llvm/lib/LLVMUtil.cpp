@@ -53,8 +53,6 @@ const std::string structName = "struct.";
  */
 bool LLVMUtil::isObject(const Value*  ref)
 {
-    if (SVFUtil::isa<Instruction>(ref) && SVFUtil::isStaticExtCall(LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(SVFUtil::cast<Instruction>(ref))) )
-        return true;
     if (SVFUtil::isa<Instruction>(ref) && SVFUtil::isHeapAllocExtCallViaRet(LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(SVFUtil::cast<Instruction>(ref))))
         return true;
     if (SVFUtil::isa<GlobalVariable>(ref))
@@ -443,6 +441,127 @@ void LLVMUtil::processArguments(int argc, char **argv, int &arg_num, char **arg_
     }
 }
 
+std::vector<std::string> LLVMUtil::getFunAnnotations(const Function* fun)
+{
+    std::vector<std::string> annotations;
+    // Get annotation variable
+    GlobalVariable *glob = fun->getParent()->getGlobalVariable("llvm.global.annotations");
+    if (glob == nullptr || !glob->hasInitializer())
+        return annotations;
+
+    ConstantArray *ca = SVFUtil::dyn_cast<ConstantArray>(glob->getInitializer());
+    if (ca == nullptr)
+        return annotations;
+
+    for (unsigned i = 0; i < ca->getNumOperands(); ++i)
+    {
+        ConstantStruct *structAn = SVFUtil::dyn_cast<ConstantStruct>(ca->getOperand(i));
+        if (structAn == nullptr)
+            continue;
+
+        ConstantExpr *expr = SVFUtil::dyn_cast<ConstantExpr>(structAn->getOperand(0));
+        if (expr == nullptr || expr->getOpcode() != Instruction::BitCast || expr->getOperand(0) != fun)
+            continue;
+
+        ConstantExpr *note = SVFUtil::cast<ConstantExpr>(structAn->getOperand(1));
+        if (note->getOpcode() != Instruction::GetElementPtr)
+            continue;
+
+        GlobalVariable *annotateStr = SVFUtil::dyn_cast<GlobalVariable>(note->getOperand(0));
+        if (annotateStr == nullptr || !annotateStr->hasInitializer())
+            continue;
+
+        ConstantDataSequential *data = SVFUtil::dyn_cast<ConstantDataSequential>(annotateStr->getInitializer());
+        if (data->isString())
+        {
+            std::string annotation = data->getAsString().str();
+            if (!annotation.empty())
+                annotations.push_back(annotation);
+        }
+    }
+    return annotations;
+}
+
+void LLVMUtil::removeFunAnnotations(std::vector<Function*>& removedFuncList)
+{
+    if (removedFuncList.empty())
+        return; // No functions to remove annotations in extapi.bc module
+
+    Module* module = removedFuncList[0]->getParent();
+    GlobalVariable* glob = module->getGlobalVariable("llvm.global.annotations");
+    if (glob == nullptr || !glob->hasInitializer())
+        return;
+
+    ConstantArray* ca = SVFUtil::dyn_cast<ConstantArray>(glob->getInitializer());
+    if (ca == nullptr)
+        return;
+
+    std::vector<Constant*> newAnnotations;
+    for (unsigned i = 0; i < ca->getNumOperands(); ++i)
+    {
+        ConstantStruct* structAn = SVFUtil::dyn_cast<ConstantStruct>(ca->getOperand(i));
+        if (structAn == nullptr)
+            continue;
+
+        ConstantExpr* expr = SVFUtil::dyn_cast<ConstantExpr>(structAn->getOperand(0));
+        if (expr == nullptr || expr->getOpcode() != Instruction::BitCast)
+        {
+            // Keep the annotation if it's not created using BitCast
+            newAnnotations.push_back(structAn);
+            continue;
+        }
+
+        Function* annotatedFunc = SVFUtil::dyn_cast<Function>(expr->getOperand(0));
+        if (annotatedFunc == nullptr || std::find(removedFuncList.begin(), removedFuncList.end(), annotatedFunc) != removedFuncList.end())
+            continue;
+
+        // Keep the annotation for all other functions
+        newAnnotations.push_back(structAn);
+    }
+
+    if (newAnnotations.size() == ca->getNumOperands())
+        return; // No annotations to remove
+
+    ArrayType* annotationsType = ArrayType::get(ca->getType()->getElementType(), newAnnotations.size());
+    Constant* newCA = ConstantArray::get(annotationsType, newAnnotations);
+
+    // Check if a global variable with the name llvm.global.annotations already exists
+    GlobalVariable* existingGlobal = module->getGlobalVariable("llvm.global.annotations");
+    if (existingGlobal)
+        // Rename the existing llvm.global.annotations to llvm.global.annotations_old
+        existingGlobal->setName("llvm.global.annotations_old");
+
+    // Create a new global variable with the updated annotations
+    GlobalVariable* newGlobal = new GlobalVariable(*module, newCA->getType(), glob->isConstant(),
+            glob->getLinkage(), newCA, "llvm.global.annotations", glob, glob->getThreadLocalMode());
+
+    // Copy other properties from the old global variable to the new one
+    newGlobal->setSection(glob->getSection());
+    newGlobal->setAlignment(llvm::MaybeAlign(glob->getAlignment()));
+
+    // Remove the old global variable
+    glob->eraseFromParent();
+}
+
+/// Get all called funcions in a parent function
+std::vector<const Function *> LLVMUtil::getCalledFunctions(const Function *F)
+{
+    std::vector<const Function *> calledFunctions;
+    for (const Instruction &I : instructions(F))
+    {
+        if (const CallBase *callInst = SVFUtil::dyn_cast<CallBase>(&I))
+        {
+            Function *calledFunction = callInst->getCalledFunction();
+            if (calledFunction)
+            {
+                calledFunctions.push_back(calledFunction);
+                std::vector<const Function *> nestedCalledFunctions = getCalledFunctions(calledFunction);
+                calledFunctions.insert(calledFunctions.end(), nestedCalledFunctions.begin(), nestedCalledFunctions.end());
+            }
+        }
+    }
+    return calledFunctions;
+}
 
 u32_t LLVMUtil::getTypeSizeInBytes(const Type* type)
 {
@@ -1031,6 +1150,43 @@ s32_t LLVMUtil::getVCallIdx(const CallBase* cs)
         idx_value = (s32_t)idx->getSExtValue();
     }
     return idx_value;
+}
+
+void LLVMUtil::getSuccBBandCondValPairVec(const SwitchInst &switchInst, SuccBBAndCondValPairVec &vec)
+{
+    // get default successor basic block and default case value (nullptr)
+    vec.push_back({switchInst.getDefaultDest(), nullptr});
+
+    // get normal case value and it's successor basic block
+    for (const auto& cs : switchInst.cases())
+        vec.push_back({cs.getCaseSuccessor(), cs.getCaseValue()});
+}
+
+s64_t LLVMUtil::getCaseValue(const SwitchInst &switchInst, SuccBBAndCondValPair &succBB2CondVal)
+{
+    const BasicBlock* succBB = succBB2CondVal.first;
+    const ConstantInt* caseValue = succBB2CondVal.second;
+    s64_t val;
+    if (caseValue == nullptr || succBB == switchInst.getDefaultDest())
+    {
+        /// default case value is set to -1
+        val = -1;
+    }
+    else
+    {
+        /// get normal case value
+        if (caseValue->getBitWidth() <= 64)
+        {
+            val = caseValue->getSExtValue();
+        }
+        else
+        {
+            /// For larger number, we preserve case value just -1 now
+            /// see more: https://github.com/SVF-tools/SVF/pull/992
+            val = -1;
+        }
+    }
+    return val;
 }
 
 namespace SVF

@@ -48,6 +48,7 @@ class SVFIR : public IRGraph
     friend class TypeBasedHeapCloning;
     friend class SVFIRWriter;
     friend class SVFIRReader;
+    friend class BVDataPTAImpl;
 
 public:
     typedef Set<const CallICFGNode*> CallSiteSet;
@@ -327,7 +328,7 @@ public:
     }
     //@}
 
-    /// Due to constaint expression, curInst is used to distinguish different instructions (e.g., memorycpy) when creating GepValVar.
+    /// Due to constraint expression, curInst is used to distinguish different instructions (e.g., memorycpy) when creating GepValVar.
     NodeID getGepValVar(const SVFValue* curInst, NodeID base,
                         const AccessPath& ap) const;
 
@@ -560,7 +561,7 @@ private:
     /// Add a temp field value node, this method can only invoked by getGepValVar
     NodeID addGepValNode(const SVFValue* curInst,const SVFValue* val, const AccessPath& ap, NodeID i, const SVFType* type);
     /// Add a field obj node, this method can only invoked by getGepObjVar
-    NodeID addGepObjNode(const MemObj* obj, const APOffset& apOffset);
+    NodeID addGepObjNode(const MemObj* obj, const APOffset& apOffset, const NodeID gepId);
     /// Add a field-insensitive node, this method can only invoked by getFIGepObjNode
     NodeID addFIObjNode(const MemObj* obj);
     //@}

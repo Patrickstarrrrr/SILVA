@@ -336,7 +336,7 @@ private:
     void processCopyRemoval(NodeID srcid, NodeID dstid);
     void processVariantGepRemoval(NodeID srcid, NodeID dstid);
     void processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
-    void propagateDelPts(const PointsTo& pts, NodeID node);
+    void propagateDelPts(const PointsTo& pts, NodeID nodeId);
 
     //@}
 
@@ -351,13 +351,14 @@ private:
 
 
 // TODOLIST 2023.9.11 --wjy
-// 0. Set type WL for edges --------- Done 9.12
+// 0. Set type WL for edges ------------------------- Done 9.12
 // 1. SCC ReDetect When Restore, note: Target fEdge and sEdge should be removed
-// 2.1 Copy Edge Removal ------------ Done 9.13
-// 2.2 Gep Edge Removal ------------- Done 9.13
-// 3. Load/Store Edge Removal ------- Done 9.12
-// 4. Addr Edge Removal ------------- Done 9.12
+// 2.1 Copy Edge Removal ---------------------------- Done 9.13
+// 2.2 Gep Edge Removal ----------------------------- Done 9.13
+// 3. Load/Store Edge Removal ----------------------- Done 9.12
+// 4. Addr Edge Removal ----------------------------- Done 9.12
 // 5. Propagate Deletion Pts Change
 // 6. Process Function Pointer
 // 7. Set Pts for subnodes when SCCRestore
 // 8. Set field sensitivity for node when gep edge is removed?
+// 9. Original Copy constraint removal  ------------- Done 9.14

@@ -1097,6 +1097,18 @@ void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
  */
 void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
 {
+    // process original copy first
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fCopy = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+    CopyFCGEdge* copyFCGEdge = SVFUtil::dyn_cast<CopyFCGEdge>(fCopy);
+    if (! copyFCGEdge->getComplexEdgeSet().empty()) {
+        // not empty, original copy removal (remove self complex constraint)
+        copyFCGEdge->removeComplexEdge(fCopy);
+        if (! copyFCGEdge->getComplexEdgeSet().empty())
+            return; // do nothing if the complex set is still not empty
+    }
+
     SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
     SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
     if (sSrcNode == sDstNode) {
@@ -1112,10 +1124,6 @@ void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
     }
     else {
         SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
-        FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
-        FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
-        FConstraintEdge* fCopy = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
-
         // 
         sCopy->removeFEdge(fCopy);
         if (sCopy->getFEdgeSet().empty()) {
@@ -1258,7 +1266,135 @@ void AndersenInc::processNormalGepRemoval(NodeID srcid, NodeID dstid, const Acce
 }
 
 // TODO: --wjy
-void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID node)
+void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
 {
-    return ;
+    if (pts.empty())
+        return;
+    
+    SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    PointsTo dPts; // objs need to be removed from pts(nodeId)
+    dPts |= pts;
+
+    // Filter 1: dPts = dPts \intersect pts(nodeId)
+    const PointsTo& nodePts = getPts(nodeId);
+    dPts &= nodePts;
+    
+    // Filter 2: incoming neighbors check
+    for (auto it = node->directInEdgeBegin(), eit = node->directInEdgeEnd();
+        it != eit; ++it)
+    {
+        if (dPts.empty()) {
+            return;
+        }
+
+        const SConstraintEdge* incomingEdge = *it;
+        NodeID src = incomingEdge->getSrcID();
+        const PointsTo & srcPts = getPts(src);
+
+        if (SVFUtil::isa<CopySCGEdge>(incomingEdge)) {
+            dPts -= srcPts;
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(incomingEdge)) {
+            for (NodeID o: srcPts) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                    dPts.reset(o);
+                else 
+                    dPts.reset(sCG->getFIObjVar(o));
+            }
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(incomingEdge)) {
+            const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(incomingEdge);
+            for (NodeID o: srcPts) {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                    dPts.reset(o);
+                else {
+                    const AccessPath& ap = ngep->getAccessPath();
+                    NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                    dPts.reset(fieldSrcPtdNode);
+                }
+            }
+        }
+    }
+
+    // pts(nodeId) = pts(nodeId) - dPts
+    for (NodeID o: dPts) {
+        clearPts(nodeId, o);
+    }
+
+    // process outgoing neighbor propagate
+    for (auto it = node->directOutEdgeBegin(), eit = node->directOutEdgeEnd();
+        it != eit; ++it)
+    {
+        const SConstraintEdge* outSEdge = *it;
+        NodeID dstId = outSEdge->getDstID();
+        if (dstId == nodeId)
+            continue; // self circle edge
+        if (SVFUtil::isa<CopySCGEdge>(outSEdge)) {
+            propagateDelPts(dPts, dstId);
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(outSEdge)) {
+            PointsTo vgepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                    vgepProPts.set(o);
+                else
+                    vgepProPts.set(sCG->getFIObjVar(o));
+            }
+            propagateDelPts(vgepProPts, dstId);
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(outSEdge)) {
+            const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(outSEdge);
+            PointsTo ngepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                    ngepProPts.set(o);
+                else {
+                    const AccessPath& ap = ngep->getAccessPath();
+                    NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                    ngepProPts.set(fieldSrcPtdNode);
+                }
+            }
+            propagateDelPts(ngepProPts, dstId);
+        }
+    }
+
+    // process complex constraint 
+    for (NodeID o: dPts) {
+        if (pag->isConstantObj(o) || isNonPointerObj(o))
+            continue;
+
+        FConstraintNode* oNode = fCG->getFConstraintNode(o);
+
+        // load complex constraint
+        for (auto it = node->outgoingLoadsBegin(), eit = node->outgoingLoadsEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sLoad = *it;
+            for (FConstraintEdge* fLoad: sLoad->getFEdgeSet()) 
+            {
+                FConstraintNode* loadDstNode = fLoad->getDstNode();
+                FConstraintEdge* fEdge = fCG->getEdge(oNode, loadDstNode, FConstraintEdge::FCopy);
+                CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+                fCopy->removeComplexEdge(fLoad);
+                if (fCopy->getComplexEdgeSet().empty())
+                    pushIntoDelEdgesWL(o, fLoad->getDstID(), FConstraintEdge::FCopy);
+            }
+        }
+
+        // store complex constraint
+        for (auto it = node->incomingStoresBegin(), eit = node->incomingStoresEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sStore = *it;
+            for (FConstraintEdge* fStore: sStore->getFEdgeSet()) 
+            {
+                FConstraintNode* storeSrcNode = fStore->getSrcNode();
+                FConstraintEdge* fEdge = fCG->getEdge(storeSrcNode, oNode, FConstraintEdge::FCopy);
+                CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+                fCopy->removeComplexEdge(fStore);
+                if (fCopy->getComplexEdgeSet().empty())
+                    pushIntoDelEdgesWL(fStore->getSrcID(), o, FConstraintEdge::FCopy);
+            }
+        }
+    }
 }

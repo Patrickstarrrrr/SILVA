@@ -359,6 +359,6 @@ private:
 // 4. Addr Edge Removal ----------------------------- Done 9.12
 // 5. Propagate Deletion Pts Change ----------------- Done 9.14
 // 6. Process Function Pointer
-// 7. Set Pts for subnodes when SCCRestore
+// 7. Set Pts for subnodes when SCCRestore. Should it be implemented in AndersenInc?
 // 8. Set field sensitivity for node when gep edge is removed?
 // 9. Original Copy constraint removal  ------------- Done 9.14

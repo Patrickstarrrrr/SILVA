@@ -191,14 +191,14 @@ AddrSCGEdge* SConstraintGraph::removeAddrSCGEdgeByFlat(NodeID src, NodeID dst)
 /*!
  * Add Copy edge
  */
-CopySCGEdge* SConstraintGraph::addCopySCGEdge(NodeID src, NodeID dst)
+CopySCGEdge* SConstraintGraph::addCopySCGEdge(NodeID src, NodeID dst, bool isRestore)
 {
     SConstraintNode* srcNode = getSConstraintNode(src);
     SConstraintNode* dstNode = getSConstraintNode(dst);
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
-    if (srcNode == dstNode)
+    if ((srcNode == dstNode) && (!isRestore))
         return nullptr;
     if (hasEdge(srcNode, dstNode, SConstraintEdge::SCopy)) {
         // add flat edge 
@@ -821,11 +821,78 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
     SCCDetection<ConstraintGraph*> d(tempG);
     d.find();
     delete tempG;
-    if (d.topoNodeStack().size() > 1) {
+    NodeStack & topoOrder = d.topoNodeStack();
+    if (topoOrder.size() > 1) {
         // TODO: ReDetect the sub scc --wjy
         // SCC broken
-        sccRestore(rep);
+        // sccRestore(rep);
         // NOTE: The edge to be removed is still in fCG and SCG ! 
+
+        // 1. reset rep/sub relation
+        NodeBS& allSubs = sccSubNodes(rep);
+        resetSubs(rep);
+        for (NodeID sub: allSubs)
+            resetRep(sub);
+
+        NodeBS allReps;
+        while (!topoOrder.empty())
+        {
+            NodeID repNodeId = topoOrder.top();
+            topoOrder.pop();
+
+            // collect new reps
+            allReps.set(repNodeId);
+
+            // {@ set new rep/sub relation
+            const NodeBS& subNodes = d.subNodes(repNodeId);
+            NodeBS subNodesNotConst;
+            for (NodeBS::iterator nodeIt = subNodes.begin(); nodeIt != subNodes.end(); nodeIt++)
+            {
+                
+                NodeID subNodeId = *nodeIt;
+                subNodesNotConst.set(subNodeId);
+                if (subNodeId != repNodeId)
+                {
+                    setRep(subNodeId, repNodeId);
+                    // subNodeId has no subs node
+                }
+            }
+            setSubs(repNodeId, subNodesNotConst);
+            // @}
+        }
+
+        // 2. restore sconstraint node
+        for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
+        {
+            NodeID eachRep = *nodeIt;
+
+            // Add new rep node into SCG
+            if (eachRep != rep)
+                addSConstraintNode(new SConstraintNode(eachRep), eachRep);
+        }
+        
+        // 3. restore sconstriant edge for each new rep node
+        /// 3.1 collect all sEdges and fEdges;
+        /// 3.2 remove sEdges
+        /// 3.3 add fEdges
+        for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
+        {
+            NodeID eachRep = *nodeIt;
+            SConstraintNode* repNode = getSConstraintNode(eachRep);
+            restoreEdge(repNode);
+        }
+
+        // 4. remove target fEdge and sEdge
+        FConstraintNode* srcFNode = fConsG->getFConstraintNode(src);
+        FConstraintNode* dstFNode = fConsG->getFConstraintNode(dst);
+        FConstraintEdge* fEdge = fConsG->getEdge(srcFNode, dstFNode, kind);
+        SConstraintNode* srcSNode = getSConstraintNode(src);
+        SConstraintNode* dstSNode = getSConstraintNode(dst);
+        SConstraintEdge* sEdge = getEdge(srcSNode, dstSNode, skind);
+        
+        removeDirectEdge(sEdge);
+        fConsG->removeDirectEdge(fEdge);
+
         return SCC_RESTORE;    
     }
     else {
@@ -975,7 +1042,7 @@ void SConstraintGraph::restoreEdge(SConstraintNode* repNode)
         if (SVFUtil::isa<AddrFCGEdge>(fEdge))
             addAddrSCGEdge(fsrc, fdst);
         else if (SVFUtil::isa<CopyFCGEdge>(fEdge))
-            addCopySCGEdge(fsrc, fdst);
+            addCopySCGEdge(fsrc, fdst, true);
         else if (SVFUtil::isa<LoadFCGEdge>(fEdge))
             addLoadSCGEdge(fsrc, fdst);
         else if (SVFUtil::isa<StoreFCGEdge>(fEdge))

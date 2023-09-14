@@ -170,7 +170,7 @@ public:
     AddrSCGEdge* removeAddrSCGEdgeByFlat(NodeID src, NodeID dst);
     AddrSCGEdge* retargetAddrSCGEdge(AddrSCGEdge* oldSEdge, NodeID src, NodeID dst);
     /// Add Copy edge
-    CopySCGEdge* addCopySCGEdge(NodeID src, NodeID dst);
+    CopySCGEdge* addCopySCGEdge(NodeID src, NodeID dst, bool isRestore = false);
     unsigned removeCopySCGEdgeByFlat(NodeID src, NodeID dst);
     CopySCGEdge* retargetCopySCGEdge(CopySCGEdge* oldSEdge, NodeID src, NodeID dst);
     /// Add Gep edge

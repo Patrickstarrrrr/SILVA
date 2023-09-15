@@ -56,6 +56,21 @@ void PTACallGraphEdge::addInDirectCallSite(const CallICFGNode* call)
 }
 //@}
 
+/// remove direct and indirect callsite
+//@{
+void PTACallGraphEdge::removeDirectCallSite(const CallICFGNode* call)
+{
+    //assert(SVFUtil::getCallee(call->getCallSite()) && "not a direct callsite??");
+    directCalls.erase(call);
+}
+
+void PTACallGraphEdge::removeInDirectCallSite(const CallICFGNode* call)
+{
+    //assert((nullptr == SVFUtil::getCallee(call->getCallSite()) || nullptr == SVFUtil::dyn_cast<Function> (SVFUtil::getForkedFun(call->getCallSite()))) && "not an indirect callsite??");
+    indirectCalls.erase(call);
+}
+//@}
+
 const std::string PTACallGraphEdge::toString() const
 {
     std::string str;
@@ -201,6 +216,26 @@ void PTACallGraph::addIndirectCallGraphEdge(const CallICFGNode* cs,const SVFFunc
         edge->addInDirectCallSite(cs);
         addEdge(edge);
         callinstToCallGraphEdgesMap[cs].insert(edge);
+    }
+}
+void PTACallGraph::removeIndirectCallGraphEdge(const CallICFGNode* cs,const SVFFunction* callerFun, const SVFFunction* calleeFun)
+{
+
+    PTACallGraphNode* caller = getCallGraphNode(callerFun);
+    PTACallGraphNode* callee = getCallGraphNode(calleeFun);
+
+    // numOfResolvedIndCallEdge++;
+
+    CallSiteID csId = addCallSite(cs, callee->getFunction());
+
+    // if(!hasGraphEdge(caller,callee, PTACallGraphEdge::CallRetEdge,csId))
+    if(hasGraphEdge(caller,callee, PTACallGraphEdge::CallRetEdge,csId))
+    {
+        PTACallGraphEdge* edge = getGraphEdge(caller,callee, PTACallGraphEdge::CallRetEdge,csId);
+        edge->removeInDirectCallSite(cs);
+        removeEdge(edge);
+        callinstToCallGraphEdgesMap[cs].erase(edge);
+        delete edge;
     }
 }
 

@@ -322,6 +322,8 @@ private:
     // std::vector<SrcDstKind *> insEdgesVec;  // inserted constraintEdges
     FIFOWorkList<FConstraintEdge *> delEdgesWL;
     FIFOWorkList<FConstraintEdge *> insEdgesWL;
+    PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
+
 public:
     bool pushIntoDelEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     bool pushIntoInsEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
@@ -338,6 +340,16 @@ private:
     void processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void propagateDelPts(const PointsTo& pts, NodeID nodeId);
 
+    void initFpPDM();
+    void computeFpPDM();
+
+    bool updateCallGraphDel(const CallSiteToFunPtrMap& callsites);
+    void onTheFlyCallGraphSolveDel(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges);
+    void resolveCPPIndCallsDel(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges);
+    void resolveIndCallsDel(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges);
+    void connectVCallToVFnsDel(const CallICFGNode* cs, const VFunSet &vfns, CallEdgeMap& newEdges);
+    void connectCaller2CalleeParamsDel(CallSite cs, const SVFFunction* F, NodePairSet &cpySrcNodes);
+    // void heapAllocatorViaIndCallDel(CallSite cs, NodePairSet &cpySrcNodes);
     //@}
 
     // void processInsertion();
@@ -352,15 +364,13 @@ private:
 
 // TODOLIST 2023.9.11 --wjy
 // 0. Set type WL for edges ------------------------- Done 9.12
-// 1. SCC ReDetect When Restore, note: Target fEdge and sEdge should be removed -- Done 9.14
+// 1. SCC ReDetect When Restore, note: Target fEdge and sEdge should be removed ---------- Done 9.14
 // 2.1 Copy Edge Removal ---------------------------- Done 9.13
 // 2.2 Gep Edge Removal ----------------------------- Done 9.13
 // 3. Load/Store Edge Removal ----------------------- Done 9.12
 // 4. Addr Edge Removal ----------------------------- Done 9.12
 // 5. Propagate Deletion Pts Change ----------------- Done 9.14
-// 6. Process Function Pointer
+// 6. Process Function Pointer ---------------------- Done 9.15
 // 7. Set Pts for subnodes when SCCRestore. Should it be implemented in AndersenInc?
 // 8. Set field sensitivity for node when gep edge is removed?
 // 9. Original Copy constraint removal  ------------- Done 9.14
-
-// test github desktop

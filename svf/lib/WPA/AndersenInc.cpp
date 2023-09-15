@@ -1398,3 +1398,333 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
         }
     }
 }
+
+void AndersenInc::processDeletion()
+{
+
+    bool newCallCopyEdge = false;
+    do {
+        newCallCopyEdge = false;
+        while (!delEdgesWL.empty()) {
+            FConstraintEdge* fEdge = delEdgesWL.pop();
+            NodeID src = fEdge->getSrcID();
+            NodeID dst = fEdge->getDstID();
+            if (SVFUtil::isa<AddrFCGEdge>(fEdge)) {
+                processAddrRemoval(src, dst);
+            }
+            else if (SVFUtil::isa<CopyFCGEdge>(fEdge)) {
+                processCopyRemoval(src, dst);
+            }
+            else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge)) {
+                processVariantGepRemoval(src, dst);
+            }
+            else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
+                NormalGepFCGEdge* ngep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
+                const AccessPath& ap = ngep->getAccessPath();
+                processNormalGepRemoval(src, dst, ap);
+            }
+            else if (SVFUtil::isa<StoreFCGEdge>(fEdge)) {
+                processStoreRemoval(src, dst);
+            }
+            else if (SVFUtil::isa<LoadFCGEdge>(fEdge)) {
+                processLoadRemoval(src, dst);
+            }
+        }
+        // computeFpPDM(); todo
+        // if (updateCallGraphDel(getIndirectCallsites()))
+        //     newCallCopyEdge = true;
+
+    } while (newCallCopyEdge);
+}
+
+
+void AndersenInc::initFpPDM() {
+    fpPtsDiffMap.clear();
+    const CallSiteToFunPtrMap& callsites = getIndirectCallsites();
+    for(CallSiteToFunPtrMap::const_iterator iter = callsites.begin(), eiter = callsites.end(); 
+        iter != eiter; ++iter)
+    {
+        const CallICFGNode* cs = iter->first;
+
+        if (SVFUtil::getSVFCallSite(cs->getCallSite()).isVirtualCall())
+        {
+            const SVFValue *vtbl = SVFUtil::getSVFCallSite(cs->getCallSite()).getVtablePtr();
+            assert(pag->hasValueNode(vtbl));
+            NodeID vtblId = pag->getValueNode(vtbl);
+
+            PtsDiff* pd = new PtsDiff;
+            pd->nodeId = vtblId;
+            pd->prePts = getPts(vtblId);
+            pd->nowPts = getPts(vtblId);
+            fpPtsDiffMap[vtblId] = pd;
+        }
+        else
+        {
+            PtsDiff* pd = new PtsDiff;
+            pd->nodeId = iter->second;
+            pd->prePts = getPts(iter->second);
+            pd->nowPts = getPts(iter->second);
+            fpPtsDiffMap[iter->second] = pd;
+        }
+    }
+}
+
+void AndersenInc::computeFpPDM() {
+    for(auto iter = fpPtsDiffMap.begin(), eiter = fpPtsDiffMap.end(); 
+        iter != eiter; ++iter)
+    {
+        NodeID nodeid = iter->first;
+        PtsDiff* pd = iter->second;
+        PointsTo ptspre = pd->nowPts;
+        PointsTo ptsnow = getPts(nodeid);
+        pd->insPts.clear();
+        pd->delPts.clear();
+        pd->insPts |= (ptsnow - ptspre);
+        pd->delPts |= (ptspre - ptsnow);
+        pd->prePts.clear();
+        pd->prePts |= ptspre;
+        pd->nowPts.clear();
+        pd->nowPts |= ptsnow;
+    }
+}
+
+bool AndersenInc::updateCallGraphDel(const CallSiteToFunPtrMap& callsites)
+{
+
+    double cgUpdateStart = stat->getClk();
+
+    CallEdgeMap newEdges;
+    onTheFlyCallGraphSolveDel(callsites,newEdges);
+    NodePairSet cpySrcNodes;	/// nodes as a src of a generated new copy edge
+    for(CallEdgeMap::iterator it = newEdges.begin(), eit = newEdges.end(); it!=eit; ++it )
+    {
+        CallSite cs = SVFUtil::getSVFCallSite(it->first->getCallSite());
+        for(FunctionSet::iterator cit = it->second.begin(), ecit = it->second.end(); cit!=ecit; ++cit)
+        {
+            connectCaller2CalleeParamsDel(cs,*cit,cpySrcNodes);
+        }
+    }
+    // for(NodePairSet::iterator it = cpySrcNodes.begin(), eit = cpySrcNodes.end(); it!=eit; ++it)
+    // {
+    //     pushIntoWorklist(it->first);
+    // }
+
+    double cgUpdateEnd = stat->getClk();
+    // timeOfUpdateCallGraph += (cgUpdateEnd - cgUpdateStart) / TIMEINTERVAL;
+    timeOfUpdateCallGraph += (cgUpdateEnd - cgUpdateStart);
+
+    return (!newEdges.empty());
+}
+
+void AndersenInc::onTheFlyCallGraphSolveDel(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges)
+{
+    for(CallSiteToFunPtrMap::const_iterator iter = callsites.begin(), eiter = callsites.end(); 
+        iter != eiter; ++iter)
+    {
+        const CallICFGNode* cs = iter->first;
+
+        if (SVFUtil::getSVFCallSite(cs->getCallSite()).isVirtualCall())
+        {
+            const SVFValue *vtbl = SVFUtil::getSVFCallSite(cs->getCallSite()).getVtablePtr();
+            assert(pag->hasValueNode(vtbl));
+            NodeID vtblId = pag->getValueNode(vtbl);
+            PtsDiff* pd = fpPtsDiffMap[vtblId];
+            if (pd->delPts.empty())
+                continue;   // if no pts changed, then do nothing
+            // resolveCPPIndCallsDel(cs, getPts(vtblId), newEdges);
+            const PointsTo & delPts = pd->delPts;
+            resolveCPPIndCallsDel(cs, delPts, newEdges);
+        }
+        else {
+            PtsDiff* pd = fpPtsDiffMap[iter->second];
+            if (pd->delPts.empty())
+                continue;   // if no pts changed, then do nothing
+            const PointsTo & delPts = pd->delPts;
+            // resolveIndCallsDel(iter->first,getPts(iter->second),newEdges);
+            resolveIndCallsDel(iter->first, delPts, newEdges);
+        }
+    }
+}
+
+// TODO
+void AndersenInc::resolveCPPIndCallsDel(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges)
+{
+    assert(SVFUtil::getSVFCallSite(cs->getCallSite()).isVirtualCall() && "not cpp virtual call");
+
+    VFunSet vfns;
+    if (Options::ConnectVCallOnCHA())
+        getVFnsFromCHA(cs, vfns);
+    else
+        getVFnsFromPts(cs, target, vfns);
+    connectVCallToVFnsDel(cs, vfns, newEdges); // TODO: handle indirect call edge?
+}
+
+void AndersenInc::resolveIndCallsDel(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges)
+ {
+    assert(pag->isIndirectCallSites(cs) && "not an indirect callsite?");
+    /// discover indirect pointer target
+     for (PointsTo::iterator ii = target.begin(), ie = target.end();
+            ii != ie; ii++)
+    {
+
+        if(getNumOfResolvedIndCallEdge() >= Options::IndirectCallLimit())
+        {
+            wrnMsg("Resolved Indirect Call Edges are Out-Of-Budget, please increase the limit");
+            return;
+        }
+
+        if(ObjVar* objPN = SVFUtil::dyn_cast<ObjVar>(pag->getGNode(*ii)))
+        {
+            const MemObj* obj = pag->getObject(objPN);
+
+            if(obj->isFunction())
+            {
+                const SVFFunction* calleefun = SVFUtil::cast<SVFFunction>(obj->getValue());
+                const SVFFunction* callee = calleefun->getDefFunForMultipleModule();
+
+                /// if the arg size does not match then we do not need to connect this parameter
+                /// even if the callee is a variadic function (the first parameter of variadic function is its paramter number)
+                if(SVFUtil::matchArgs(cs->getCallSite(), callee) == false)
+                    continue;
+
+                // if(0 == getIndCallMap()[cs].count(callee))
+                // {
+                //     newEdges[cs].insert(callee);
+                //     getIndCallMap()[cs].insert(callee);
+
+                //     ptaCallGraph->addIndirectCallGraphEdge(cs, cs->getCaller(), callee);
+                //     // FIXME: do we need to update llvm call graph here?
+                //     // The indirect call is maintained by ourself, We may update llvm's when we need to
+                //     //CallGraphNode* callgraphNode = callgraph->getOrInsertFunction(cs.getCaller());
+                //     //callgraphNode->addCalledFunction(cs,callgraph->getOrInsertFunction(callee));
+                // }
+                if(0 < getIndCallMap()[cs].count(callee))
+                {
+                    newEdges[cs].insert(callee);
+                    getIndCallMap()[cs].erase(callee);
+
+                    ptaCallGraph->removeIndirectCallGraphEdge(cs, cs->getCaller(), callee);
+                }
+            }
+        }
+    }   
+ }
+
+ void AndersenInc::connectVCallToVFnsDel(const CallICFGNode* cs, const VFunSet &vfns, CallEdgeMap& newEdges)
+{
+    //// connect all valid functions
+    for (VFunSet::const_iterator fit = vfns.begin(),
+            feit = vfns.end(); fit != feit; ++fit)
+    {
+        const SVFFunction* callee = *fit;
+        callee = callee->getDefFunForMultipleModule();
+        // if (getIndCallMap()[cs].count(callee) > 0)
+        //     continue;
+        if (getIndCallMap()[cs].count(callee) == 0)
+            continue;
+        if(SVFUtil::getSVFCallSite(cs->getCallSite()).arg_size() == callee->arg_size() ||
+                (SVFUtil::getSVFCallSite(cs->getCallSite()).isVarArg() && callee->isVarArg()))
+        {
+            newEdges[cs].insert(callee);
+            getIndCallMap()[cs].erase(callee);
+            const CallICFGNode* callBlockNode = pag->getICFG()->getCallICFGNode(cs->getCallSite());
+            ptaCallGraph->removeIndirectCallGraphEdge(callBlockNode, cs->getCaller(),callee);
+        }
+    }
+}
+
+void AndersenInc::connectCaller2CalleeParamsDel(CallSite cs, const SVFFunction* F, NodePairSet &cpySrcNodes)
+{
+    assert(F);
+
+    DBOUT(DAndersen, SVFUtil::outs() << "connect parameters from indirect callsite " << *cs.getInstruction() << " to callee " << *F << "\n");
+
+    CallICFGNode* callBlockNode = pag->getICFG()->getCallICFGNode(cs.getInstruction());
+    RetICFGNode* retBlockNode = pag->getICFG()->getRetICFGNode(cs.getInstruction());
+
+    if(SVFUtil::isHeapAllocExtFunViaRet(F) && pag->callsiteHasRet(retBlockNode))
+    {
+        // heapAllocatorViaIndCall(cs,cpySrcNodes); // TODO 
+        SVFUtil::outs() << "Do not handle heapAllocatorViaIndCall in incremental analysis!\n";
+    }
+
+    if (pag->funHasRet(F) && pag->callsiteHasRet(retBlockNode))
+    {
+        const PAGNode* cs_return = pag->getCallSiteRet(retBlockNode);
+        const PAGNode* fun_return = pag->getFunRet(F);
+        if (cs_return->isPointer() && fun_return->isPointer())
+        {
+            NodeID dstrec = cs_return->getId();
+            NodeID srcret = fun_return->getId();
+            // if(addCopyEdge(srcret, dstrec)) // TODO: ret-->rec
+            // {
+            //     cpySrcNodes.insert(std::make_pair(srcret,dstrec));
+            // }
+            pushIntoDelEdgesWL(srcret, dstrec, FConstraintEdge::FCopy);
+        }
+        else
+        {
+            DBOUT(DAndersen, SVFUtil::outs() << "not a pointer ignored\n");
+        }
+    }
+
+    if (pag->hasCallSiteArgsMap(callBlockNode) && pag->hasFunArgsList(F))
+    {
+
+        // connect actual and formal param
+        const SVFIR::SVFVarList& csArgList = pag->getCallSiteArgsList(callBlockNode);
+        const SVFIR::SVFVarList& funArgList = pag->getFunArgsList(F);
+        //Go through the fixed parameters.
+        DBOUT(DPAGBuild, outs() << "      args:");
+        SVFIR::SVFVarList::const_iterator funArgIt = funArgList.begin(), funArgEit = funArgList.end();
+        SVFIR::SVFVarList::const_iterator csArgIt  = csArgList.begin(), csArgEit = csArgList.end();
+        for (; funArgIt != funArgEit; ++csArgIt, ++funArgIt)
+        {
+            //Some programs (e.g. Linux kernel) leave unneeded parameters empty.
+            if (csArgIt  == csArgEit)
+            {
+                DBOUT(DAndersen, SVFUtil::outs() << " !! not enough args\n");
+                break;
+            }
+            const PAGNode *cs_arg = *csArgIt ;
+            const PAGNode *fun_arg = *funArgIt;
+
+            if (cs_arg->isPointer() && fun_arg->isPointer())
+            {
+                DBOUT(DAndersen, SVFUtil::outs() << "process actual parm  " << cs_arg->toString() << " \n");
+                NodeID srcAA = cs_arg->getId();
+                NodeID dstFA = fun_arg->getId();
+                // if(addCopyEdge(srcAA, dstFA)) // TODO: act arg --> fom arg
+                // {
+                //     cpySrcNodes.insert(std::make_pair(srcAA,dstFA));
+                // }
+                pushIntoDelEdgesWL(srcAA, dstFA, FConstraintEdge::FCopy);
+            }
+        }
+
+        //Any remaining actual args must be varargs.
+        if (F->isVarArg())
+        {
+            NodeID vaF = pag->getVarargNode(F);
+            DBOUT(DPAGBuild, SVFUtil::outs() << "\n      varargs:");
+            for (; csArgIt != csArgEit; ++csArgIt)
+            {
+                const PAGNode *cs_arg = *csArgIt;
+                if (cs_arg->isPointer())
+                {
+                    NodeID vnAA = cs_arg->getId();
+                    // if (addCopyEdge(vnAA,vaF)) // TODO: remaining actual arg --> var arg
+                    // {
+                    //     cpySrcNodes.insert(std::make_pair(vnAA,vaF));
+                    // }
+                    pushIntoDelEdgesWL(vnAA, vaF, FConstraintEdge::FCopy);
+                }
+            }
+        }
+        if(csArgIt != csArgEit)
+        {
+            writeWrnMsg("too many args to non-vararg func.");
+            writeWrnMsg("(" + cs.getInstruction()->getSourceLoc() + ")");
+        }
+    }
+}

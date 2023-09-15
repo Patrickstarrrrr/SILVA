@@ -245,7 +245,7 @@ unsigned SConstraintGraph::removeCopySCGEdgeByFlat(NodeID src, NodeID dst) // TO
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SCopy);
 
-    CopySCGEdge* copy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
+    // CopySCGEdge* copy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
     sEdge->removeFEdge(fEdge);
     // fEdge-> 
     if (sEdge->getFEdgeSet().size() == 0)

@@ -117,6 +117,10 @@ public:
     void addInDirectCallSite(const CallICFGNode* call);
     //@}
 
+    void removeDirectCallSite(const CallICFGNode* call);
+
+    void removeInDirectCallSite(const CallICFGNode* call);
+
     /// Iterators for direct and indirect callsites
     //@{
     inline CallInstSet::const_iterator directCallsBegin() const
@@ -419,11 +423,17 @@ public:
         edge->getDstNode()->addIncomingEdge(edge);
         edge->getSrcNode()->addOutgoingEdge(edge);
     }
+    inline void removeEdge(PTACallGraphEdge* edge)
+    {
+        edge->getDstNode()->removeIncomingEdge(edge);
+        edge->getSrcNode()->removeOutgoingEdge(edge);
+    }
 
     /// Add direct/indirect call edges
     //@{
     void addDirectCallGraphEdge(const CallICFGNode* call, const SVFFunction* callerFun, const SVFFunction* calleeFun);
     void addIndirectCallGraphEdge(const CallICFGNode* cs,const SVFFunction* callerFun, const SVFFunction* calleeFun);
+    void removeIndirectCallGraphEdge(const CallICFGNode* cs,const SVFFunction* callerFun, const SVFFunction* calleeFun);
     //@}
 
     /// Get callsites invoking the callee

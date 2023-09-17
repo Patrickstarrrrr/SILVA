@@ -129,6 +129,7 @@ void AndersenInc::analyze()
 
     // if (!readResultsFromFile)
         // Finalize the analysis
+    processDeletion();
     finalize();
 }
 
@@ -1113,13 +1114,20 @@ void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
     SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
     if (sSrcNode == sDstNode) {
         // Copy Edge in SCC
-        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FCopy) == 1) {
+        NodeBS newReps;
+        NodeID oldRep;
+        unsigned sccKeep = sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FCopy, newReps, oldRep);
+        if (1 == sccKeep) {
             // SCC KEEP
             // SCC KEEP should remove the fEdge
             return;
         }
         // SCC Restore
         // SCC Restore should remove the fEdge and sEdge
+        // reset Pts for new rep nodes
+        for (NodeID id: newReps) {
+            unionPts(id, getPts(oldRep));
+        }
         propagateDelPts(getPts(srcid), dstid);
     }
     else {
@@ -1146,10 +1154,19 @@ void AndersenInc::processVariantGepRemoval(NodeID srcid, NodeID dstid)
     PointsTo tmpDstPts;
     if (sSrcNode == sDstNode) {
         // VGep Edge in SCC
-        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FVariantGep) == 1) {
+        NodeBS newReps;
+        NodeID oldRep;
+        unsigned sccKeep = sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FVariantGep, newReps, oldRep);
+        if (1 == sccKeep) {
             // SCC KEEP
             // SCC KEEP should remove the fEdge
             return;
+        }
+        // SCC Restore
+        // SCC Restore should remove the fEdge and sEdge
+        // reset Pts for new rep nodes
+        for (NodeID id: newReps) {
+            unionPts(id, getPts(oldRep));
         }
         // SCC Restore
         // SCC Restore should remove the fEdge and sEdge
@@ -1214,11 +1231,21 @@ void AndersenInc::processNormalGepRemoval(NodeID srcid, NodeID dstid, const Acce
     PointsTo tmpDstPts;
     if (sSrcNode == sDstNode) {
         // NGep Edge in SCC
-        if (sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FNormalGep) == 1) {
+        NodeBS newReps;
+        NodeID oldRep;
+        unsigned sccKeep = sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FNormalGep, newReps, oldRep);
+        if (1 == sccKeep) {
             // SCC KEEP
             // SCC KEEP should remove the fEdge
             return;
         }
+        // SCC Restore
+        // SCC Restore should remove the fEdge and sEdge
+        // reset Pts for new rep nodes
+        for (NodeID id: newReps) {
+            unionPts(id, getPts(oldRep));
+        }
+
         // SCC Restore
         // SCC Restore should remove the fEdge and sEdge
 
@@ -1401,7 +1428,7 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
 
 void AndersenInc::processDeletion()
 {
-
+    // pushIntoDelEdgesWL(47, 61, FConstraintEdge::FLoad);
     bool newCallCopyEdge = false;
     do {
         newCallCopyEdge = false;

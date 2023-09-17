@@ -218,44 +218,44 @@ CopySCGEdge* SConstraintGraph::addCopySCGEdge(NodeID src, NodeID dst, bool isRes
     return edge;
 }
 
-/*!
- * Remove a copy edge
- */
-unsigned SConstraintGraph::removeCopySCGEdgeByFlat(NodeID src, NodeID dst) // TODO: --wjy
-{
-    SConstraintNode* srcNode = getSConstraintNode(src);
-    SConstraintNode* dstNode = getSConstraintNode(dst);
-    if (srcNode == dstNode)
-    {
-        // edgeInSCC todo
-        unsigned flag = sccBreakDetect(src, dst, FConstraintEdge::FCopy);
-        if (flag == 0) {
-            // SCC Restore: edge to be removed is still in fCG and sCG
-            // TODO: after redetect sub SCC, edge should be removed
-            return 1;
-        }
-        else if (flag == 1) {
-            // SCC Keep: edge has been removed from both fCG and sCG
-            return 0;
-        }
-    }
-    FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
-    FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
+// /*!
+//  * Remove a copy edge
+//  */
+// unsigned SConstraintGraph::removeCopySCGEdgeByFlat(NodeID src, NodeID dst) // TODO: --wjy
+// {
+//     SConstraintNode* srcNode = getSConstraintNode(src);
+//     SConstraintNode* dstNode = getSConstraintNode(dst);
+//     if (srcNode == dstNode)
+//     {
+//         // edgeInSCC todo
+//         unsigned flag = sccBreakDetect(src, dst, FConstraintEdge::FCopy);
+//         if (flag == 0) {
+//             // SCC Restore: edge to be removed is still in fCG and sCG
+//             // TODO: after redetect sub SCC, edge should be removed
+//             return 1;
+//         }
+//         else if (flag == 1) {
+//             // SCC Keep: edge has been removed from both fCG and sCG
+//             return 0;
+//         }
+//     }
+//     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
+//     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
 
-    FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
-    SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SCopy);
+//     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+//     SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SCopy);
 
-    // CopySCGEdge* copy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
-    sEdge->removeFEdge(fEdge);
-    // fEdge-> 
-    if (sEdge->getFEdgeSet().size() == 0)
-    {
-        // TODO: scc detect
-        return 1;
-    }
-    // return copy;
-    return 0;
-}
+//     // CopySCGEdge* copy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
+//     sEdge->removeFEdge(fEdge);
+//     // fEdge-> 
+//     if (sEdge->getFEdgeSet().size() == 0)
+//     {
+//         // TODO: scc detect
+//         return 1;
+//     }
+//     // return copy;
+//     return 0;
+// }
 
 /*!
  * Add Gep edge
@@ -808,7 +808,7 @@ void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 /*
  * SCC break detection after a direct edge removal
  */
-unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)
+unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep)
 {
     enum {SCC_RESTORE, SCC_KEEP};
     SConstraintEdge::SConstraintEdgeK skind = F2SKind(kind);
@@ -817,6 +817,7 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
     assert(rep1 == rep2 && "sccBreakDetect only for edge in scc!\n");
 
     NodeID rep = rep1;
+    oldRep = rep;
     ConstraintGraph* tempG = buildTempG(rep, src, dst, kind);
     SCCDetection<ConstraintGraph*> d(tempG);
     d.find();
@@ -829,12 +830,11 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
         // NOTE: The edge to be removed is still in fCG and SCG ! 
 
         // 1. reset rep/sub relation
-        NodeBS& allSubs = sccSubNodes(rep);
+        NodeBS allSubs = sccSubNodes(rep);
         resetSubs(rep);
         for (NodeID sub: allSubs)
             resetRep(sub);
 
-        NodeBS allReps;
         while (!topoOrder.empty())
         {
             NodeID repNodeId = topoOrder.top();

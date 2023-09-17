@@ -171,7 +171,7 @@ public:
     AddrSCGEdge* retargetAddrSCGEdge(AddrSCGEdge* oldSEdge, NodeID src, NodeID dst);
     /// Add Copy edge
     CopySCGEdge* addCopySCGEdge(NodeID src, NodeID dst, bool isRestore = false);
-    unsigned removeCopySCGEdgeByFlat(NodeID src, NodeID dst);
+    // unsigned removeCopySCGEdgeByFlat(NodeID src, NodeID dst);
     CopySCGEdge* retargetCopySCGEdge(CopySCGEdge* oldSEdge, NodeID src, NodeID dst);
     /// Add Gep edge
     NormalGepSCGEdge* addNormalGepSCGEdge(NodeID src, NodeID dst, const AccessPath& ap);
@@ -230,7 +230,7 @@ public:
     /// Remove store edge from their src and dst edge sets
     void removeStoreEdge(StoreSCGEdge* edge);
     /// SCC break detection
-    unsigned sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+    unsigned sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep);
     ConstraintGraph* buildTempG(NodeID rep, NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     void sccRestore(NodeID rep);
     void restoreEdge(SConstraintNode* repNode);

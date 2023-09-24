@@ -758,8 +758,8 @@ void SConstraintGraph::reTargetSrcOfEdge(SConstraintEdge* edge, SConstraintNode*
  */
 void SConstraintGraph::removeAddrEdge(AddrSCGEdge* edge)
 {
-    getSConstraintNode(edge->getSrcID())->removeOutgoingAddrEdge(edge);
-    getSConstraintNode(edge->getDstID())->removeIncomingAddrEdge(edge);
+    getSConstraintNode_d(edge->getSrcID())->removeOutgoingAddrEdge(edge);
+    getSConstraintNode_d(edge->getDstID())->removeIncomingAddrEdge(edge);
     u32_t num = AddrSCGEdgeSet.erase(edge);
     (void)num; // Suppress warning of unused variable under release build
     assert(num && "edge not in the set, can not remove!!!");
@@ -771,8 +771,8 @@ void SConstraintGraph::removeAddrEdge(AddrSCGEdge* edge)
  */
 void SConstraintGraph::removeLoadEdge(LoadSCGEdge* edge)
 {
-    getSConstraintNode(edge->getSrcID())->removeOutgoingLoadEdge(edge);
-    getSConstraintNode(edge->getDstID())->removeIncomingLoadEdge(edge);
+    getSConstraintNode_d(edge->getSrcID())->removeOutgoingLoadEdge(edge);
+    getSConstraintNode_d(edge->getDstID())->removeIncomingLoadEdge(edge);
     u32_t num = LoadSCGEdgeSet.erase(edge);
     (void)num; // Suppress warning of unused variable under release build
     assert(num && "edge not in the set, can not remove!!!");
@@ -784,8 +784,8 @@ void SConstraintGraph::removeLoadEdge(LoadSCGEdge* edge)
  */
 void SConstraintGraph::removeStoreEdge(StoreSCGEdge* edge)
 {
-    getSConstraintNode(edge->getSrcID())->removeOutgoingStoreEdge(edge);
-    getSConstraintNode(edge->getDstID())->removeIncomingStoreEdge(edge);
+    getSConstraintNode_d(edge->getSrcID())->removeOutgoingStoreEdge(edge);
+    getSConstraintNode_d(edge->getDstID())->removeIncomingStoreEdge(edge);
     u32_t num = StoreSCGEdgeSet.erase(edge);
     (void)num; // Suppress warning of unused variable under release build
     assert(num && "edge not in the set, can not remove!!!");
@@ -797,8 +797,8 @@ void SConstraintGraph::removeStoreEdge(StoreSCGEdge* edge)
  */
 void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 {
-    getSConstraintNode(edge->getSrcID())->removeOutgoingDirectEdge(edge);
-    getSConstraintNode(edge->getDstID())->removeIncomingDirectEdge(edge);
+    getSConstraintNode_d(edge->getSrcID())->removeOutgoingDirectEdge(edge);
+    getSConstraintNode_d(edge->getDstID())->removeIncomingDirectEdge(edge);
     u32_t num = directSEdgeSet.erase(edge);
     (void)num; // Suppress warning of unused variable under release build
     assert(num && "edge not in the set, can not remove!!!");
@@ -811,12 +811,18 @@ void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep)
 {
     enum {SCC_RESTORE, SCC_KEEP};
+    if (src == 5915 && dst == 320798 && kind == FConstraintEdge::FCopy)
+    {
+        src = src;
+    }
     SConstraintEdge::SConstraintEdgeK skind = F2SKind(kind);
     NodeID rep1 = sccRepNode(src);
     NodeID rep2 = sccRepNode(dst);
     assert(rep1 == rep2 && "sccBreakDetect only for edge in scc!\n");
 
     NodeID rep = rep1;
+    SConstraintNode* originRepNode = getSConstraintNode(rep);
+
     oldRep = rep;
     ConstraintGraph* tempG = buildTempG(rep, src, dst, kind);
     SCCDetection<ConstraintGraph*> d(tempG);
@@ -875,12 +881,15 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
         /// 3.1 collect all sEdges and fEdges;
         /// 3.2 remove sEdges
         /// 3.3 add fEdges
-        for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
-        {
-            NodeID eachRep = *nodeIt;
-            SConstraintNode* repNode = getSConstraintNode(eachRep);
-            restoreEdge(repNode);
-        }
+        // for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
+        // {
+        //     NodeID eachRep = *nodeIt;
+        //     SConstraintNode* repNode = getSConstraintNode(eachRep);
+        //     restoreEdge(repNode);
+        // }
+        restoreEdge(originRepNode);
+        if (!allReps.test(rep))
+            removeSConstraintNode(originRepNode);
 
         // 4. remove target fEdge and sEdge
         FConstraintNode* srcFNode = fConsG->getFConstraintNode(src);

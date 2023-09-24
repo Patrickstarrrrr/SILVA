@@ -6,27 +6,32 @@
 #include "Graphs/FlatConsG.h"
 
 namespace SVF{
-// class SDK 
-// {
-//     NodeID src;
-//     NodeID dst;
-//     FConstraintEdge::FConstraintEdgeK kind;
-//     LocationSet ls;
-//     SrcDstKind(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k)
-//     {
-//         src = s;
-//         dst = d;
-//         kind = k;
-//     }
-//     SrcDstKind(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, LocationSet _ls)
-//     {
-//         src = s;
-//         dst = d;
-//         kind = k;
-//         ls = _ls;
-//     }
-//     ~SrcDstKind(){}
-// };
+class SDK 
+{
+public:
+
+    NodeID src;
+    NodeID dst;
+    FConstraintEdge::FConstraintEdgeK kind;
+    AccessPath ap;
+    FConstraintEdge* compEdge;
+    SDK(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, FConstraintEdge* ce = nullptr)
+    {
+        src = s;
+        dst = d;
+        kind = k;
+        compEdge = ce;
+    }
+    SDK(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, const AccessPath& ap_)
+    {
+        src = s;
+        dst = d;
+        kind = k;
+        ap = ap_;
+        compEdge = nullptr;
+    }
+    ~SDK(){}
+};
 
 // class AndersenInc : public AndersenWaveDiff
 typedef WPASolver<SConstraintGraph*> WPASConstraintSolver;
@@ -116,6 +121,14 @@ public:
     static double timeOfProcessCopyGep;
     static double timeOfProcessLoadStore;
     static double timeOfUpdateCallGraph;
+    
+    static double timeOfExhaustivePTA;
+    static double timeOfIncrementalPTA;
+    static double timeOfDeletionPTA;
+    static double timeOfInsertionPTA;
+
+    static double timeOfDeletionSCC;
+
     //@}
     typedef SCCDetection<SConstraintGraph*> CGSCC;
     typedef OrderedMap<CallSite, NodeID> CallSite2DummyValPN;
@@ -127,6 +140,11 @@ public:
         MaxPointsToSetSize = 0;
         timeOfProcessCopyGep = 0;
         timeOfProcessLoadStore = 0;
+
+        timeOfExhaustivePTA = 0;
+        timeOfIncrementalPTA = 0;
+        timeOfDeletionPTA = 0;
+        timeOfInsertionPTA = 0;
     }
 
     /// SCC methods
@@ -322,6 +340,9 @@ private:
     // std::vector<SrcDstKind *> insEdgesVec;  // inserted constraintEdges
     FIFOWorkList<FConstraintEdge *> delEdgesWL;
     FIFOWorkList<FConstraintEdge *> insEdgesWL;
+    FIFOWorkList<FConstraintEdge *> insPropWL;
+    std::vector<SDK*> insEdgeVec;
+    std::vector<SDK*> insDirectEdgeVec;
     PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
 
 public:
@@ -331,7 +352,7 @@ private:
     /// handling deletion
     //@{
     void processDeletion();
-    void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
+    // void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
     void processLoadRemoval(NodeID srcid, NodeID dstid);
     void processStoreRemoval(NodeID srcid, NodeID dstid);
     void processAddrRemoval(NodeID srcid, NodeID dstid);
@@ -352,7 +373,36 @@ private:
     // void heapAllocatorViaIndCallDel(CallSite cs, NodePairSet &cpySrcNodes);
     //@}
 
-    // void processInsertion();
+    /// pseudo wpa
+    void processInsertion_pseudo();
+    void processLoadAddition_pseudo(NodeID srcid, NodeID dstid);
+    void processStoreAddition_pseudo(NodeID srcid, NodeID dstid);
+    void processAddrAddition_pseudo(NodeID srcid, NodeID dstid); 
+    void processCopyAddition_pseudo(NodeID srcid, NodeID dstid);
+    void processVariantGepAddition_pseudo(NodeID srcid, NodeID dstid);
+    void processNormalGepAddition_pseudo(NodeID srcid, NodeID dstid, const AccessPath& ap);
+
+    /// handling insertion
+    //@{
+    void processInsertion();
+    bool processLoadAddition(NodeID srcid, NodeID dstid);
+    bool processStoreAddition(NodeID srcid, NodeID dstid);
+    void processAddrAddition(NodeID srcid, NodeID dstid); 
+    void processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge = nullptr);
+    void processVariantGepAddition(NodeID srcid, NodeID dstid);
+    void processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processCopyConstraintAddition(NodeID srcid, NodeID dstid);
+    void processVariantGepConstraintAddition(NodeID srcid, NodeID dstid);
+    void processNormalGepConstraintAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void propagateInsPts(const PointsTo& pts, NodeID nodeId);
+
+    bool updateCallGraphIns(const CallSiteToFunPtrMap& callsites);
+    void onTheFlyCallGraphSolveIns(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges);
+    void resolveCPPIndCallsIns(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges);
+    void resolveIndCallsIns(const CallICFGNode* cs, const PointsTo& target, CallEdgeMap& newEdges);
+    void connectVCallToVFnsIns(const CallICFGNode* cs, const VFunSet &vfns, CallEdgeMap& newEdges);
+    void connectCaller2CalleeParamsIns(CallSite cs, const SVFFunction* F, NodePairSet &cpySrcNodes);
+    // @}
     
 
 }; // End class AndersenInc
@@ -371,6 +421,15 @@ private:
 // 4. Addr Edge Removal ----------------------------- Done 9.12
 // 5. Propagate Deletion Pts Change ----------------- Done 9.14
 // 6. Process Function Pointer ---------------------- Done 9.15
-// 7. Set Pts for subnodes when SCCRestore. Should it be implemented in AndersenInc?
+// 7. Set Pts for subnodes when SCCRestore. Should it be implemented in AndersenInc? ----- Done 9.17
 // 8. Set field sensitivity for node when gep edge is removed?
 // 9. Original Copy constraint removal  ------------- Done 9.14
+
+// TODOLIST 2023.9.12 --wjy
+// 1. Copy Edge Addition
+// 2. Gep Edge Addition
+// 3. Load/Store Edge Addition
+// 4. Addr Edge Addition -------------------- Done 9.18
+// 5. Propagate Insertion Pts Change
+// 6. Process Function Pointer
+//

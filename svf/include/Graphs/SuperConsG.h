@@ -93,6 +93,10 @@ public:
 
     /// Get/add/remove constraint node
     //@{
+    inline SConstraintNode* getSConstraintNode_d(NodeID id) const
+    {
+        return getGNode(id);
+    }
     inline SConstraintNode* getSConstraintNode(NodeID id) const
     {
         id = sccRepNode(id);

@@ -19,7 +19,7 @@ const OptionMap<enum PTAStat::ClockType> Options::ClockType(
 const Option<bool> Options::MarkedClocksOnly(
     "marked-clocks-only",
     "Only measure times where explicitly marked",
-    true
+    false
 );
 
 const OptionMap<NodeIDAllocator::Strategy> Options::NodeAllocStrat(

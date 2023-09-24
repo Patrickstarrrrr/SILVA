@@ -308,6 +308,11 @@ void AndersenIncStat::performStat()
     constraintGraphStat();
 
     timeStatMap["TotalTime"] = (endTime - startTime)/TIMEINTERVAL;
+    timeStatMap["ExhaustivePTATime"] = AndersenInc::timeOfExhaustivePTA;
+    timeStatMap["IncrementalPTATime"] = AndersenInc::timeOfIncrementalPTA;
+    timeStatMap["DeletionPTATime"] = AndersenInc::timeOfDeletionPTA;
+    timeStatMap["InsertionPTATime"] = AndersenInc::timeOfInsertionPTA;
+    timeStatMap["SCCDeletionTime"] = AndersenInc::timeOfDeletionSCC;
     timeStatMap["SCCDetectTime"] = AndersenInc::timeOfSCCDetection;
     timeStatMap["SCCMergeTime"] =  AndersenInc::timeOfSCCMerges;
     timeStatMap[CollapseTime] =  AndersenInc::timeOfCollapse;

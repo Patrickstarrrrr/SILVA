@@ -40,7 +40,8 @@ class AndersenInc: public WPASConstraintSolver, public BVDataPTAImpl
 
 private:
     static AndersenInc* incpta;
-
+    // static AndersenWaveDiff* wdpta;
+    
 
 protected:
     /// Flat Constraint Graph
@@ -54,6 +55,7 @@ public:
     // AndersenWaveDiff(_pag, type, alias_check), fCG(nullptr), sCG(nullptr)
         : BVDataPTAImpl(_pag, type, alias_check)
     {
+        // wdpta = new AndersenWaveDiff(pag);
         iterationForPrintStat = OnTheFlyIterBudgetForStat;
     }
 
@@ -132,7 +134,9 @@ public:
     //@}
     typedef SCCDetection<SConstraintGraph*> CGSCC;
     typedef OrderedMap<CallSite, NodeID> CallSite2DummyValPN;
+    typedef Map<NodeID, NodeID>  ID2IDMap;
 
+    ID2IDMap field2Base;
     /// Reset data
     inline void resetData()
     {
@@ -235,6 +239,8 @@ public:
         if (incpta == nullptr)
         {
             incpta = new AndersenInc(_pag, Andersen_INC, false);
+            // wdpta = new AndersenWaveDiff(_pag); //
+            // wdpta->analyze(); //
             incpta->analyze();
             return incpta;
         }
@@ -242,8 +248,10 @@ public:
     }
     static void releaseAndersenInc()
     {
-        if (incpta)
+        if (incpta) {
+            // delete wdpta;
             delete incpta;
+        }
         incpta = nullptr;
     }
 
@@ -344,11 +352,15 @@ private:
     std::vector<SDK*> insEdgeVec;
     std::vector<SDK*> insDirectEdgeVec;
     PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
+    PtsDiffMap allPtsDiffMap; // all ptr pts diff
+
 
 public:
     bool pushIntoDelEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     bool pushIntoInsEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+
 private:
+    void singleIncremental(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind, int count);
     /// handling deletion
     //@{
     void processDeletion();
@@ -363,6 +375,11 @@ private:
 
     void initFpPDM();
     void computeFpPDM();
+    void initAllPDM();
+    void computeAllPDM();
+
+    void dumpPts(const PointsTo & pts);
+    void dumpSDK(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
 
     bool updateCallGraphDel(const CallSiteToFunPtrMap& callsites);
     void onTheFlyCallGraphSolveDel(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges);
@@ -388,13 +405,13 @@ private:
     bool processLoadAddition(NodeID srcid, NodeID dstid);
     bool processStoreAddition(NodeID srcid, NodeID dstid);
     void processAddrAddition(NodeID srcid, NodeID dstid); 
-    void processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge = nullptr);
-    void processVariantGepAddition(NodeID srcid, NodeID dstid);
-    void processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    bool processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge = nullptr);
+    bool processVariantGepAddition(NodeID srcid, NodeID dstid);
+    bool processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processCopyConstraintAddition(NodeID srcid, NodeID dstid);
     void processVariantGepConstraintAddition(NodeID srcid, NodeID dstid);
     void processNormalGepConstraintAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
-    void propagateInsPts(const PointsTo& pts, NodeID nodeId);
+    void propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameSCC = false);
 
     bool updateCallGraphIns(const CallSiteToFunPtrMap& callsites);
     void onTheFlyCallGraphSolveIns(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges);

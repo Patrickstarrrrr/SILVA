@@ -12,6 +12,7 @@ using namespace SVFUtil;
 using namespace std;
 
 AndersenInc* AndersenInc::incpta = nullptr;
+// AndersenWaveDiff* AndersenInc::wdpta = nullptr;
 
 u32_t AndersenInc::numOfProcessedAddr = 0;
 u32_t AndersenInc::numOfProcessedCopy = 0;
@@ -82,6 +83,8 @@ void AndersenInc::initialize()
 
 SVF::AndersenInc::~AndersenInc()
 {
+    // delete wdpta;
+
     delete sCG;
     sCG = nullptr;
     delete fCG;
@@ -96,11 +99,22 @@ void AndersenInc::finalize()
 
     if (Options::PrintCGGraph())
         sCG->print();
+
+    // post process field 2 base
+    for (auto it = field2Base.begin(), eit = field2Base.end(); it != eit; ++it)
+    {
+        NodeID field = it->first, base = sccRepNode(it->second);
+        if (sCG->hasGNode(field))
+            mergeNodeToRep(field, base);
+    }
+
     BVDataPTAImpl::finalize();
 }
 
 void AndersenInc::analyze()
 {
+
+    // wdpta->analyze();
     initialize();
 
     // if(!readResultsFromFile)
@@ -131,49 +145,167 @@ void AndersenInc::analyze()
     // Analysis is finished, reset the alarm if we set it.
     SVFUtil::stopAnalysisLimitTimer(limitTimerSet);
 
+    // normalizePointsTo();
+    
     double eptaEnd = stat->getClk();
     timeOfExhaustivePTA += (eptaEnd - eptaStart) / TIMEINTERVAL;
-
+    SVFUtil::outs() << "Time of Exhaustive PTA: " << timeOfExhaustivePTA << "\n";
     DBOUT(DGENERAL, outs() << SVFUtil::pasMsg("Finish Solving Constraints\n"));
-
+    initAllPDM();
     // }
 
-    // if (!readResultsFromFile)
-        // Finalize the analysis
-    int count = 0;
+    // int addrcount = 0;
+    // SVFStmt::SVFStmtSetTy& addrs = pag->getPTASVFStmtSet(SVFStmt::Addr);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = addrs.begin(), eiter =
+    //             addrs.end(); iter != eiter; ++iter)
+    // {
+    //     addrcount++;
+    //     const AddrStmt* edge = SVFUtil::cast<AddrStmt>(*iter);
+    //     // addAddrFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FAddr, addrcount);
+    // }
+
+    // int copycount = 0;
+    // SVFStmt::SVFStmtSetTy& copys = pag->getPTASVFStmtSet(SVFStmt::Copy);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = copys.begin(), eiter =
+    //             copys.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const CopyStmt* edge = SVFUtil::cast<CopyStmt>(*iter);
+    //     // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    // }
+
+    // SVFStmt::SVFStmtSetTy& phis = pag->getPTASVFStmtSet(SVFStmt::Phi);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = phis.begin(), eiter =
+    //             phis.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const PhiStmt* edge = SVFUtil::cast<PhiStmt>(*iter);
+    //     for(const auto opVar : edge->getOpndVars()) {
+    //         // addCopyFCGEdge(opVar->getId(),edge->getResID());
+    //         NodeID src = opVar->getId();
+    //         NodeID dst = edge->getResID();
+    //         singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    //     }
+    // }
+
+    // SVFStmt::SVFStmtSetTy& selects = pag->getPTASVFStmtSet(SVFStmt::Select);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = selects.begin(), eiter =
+    //             selects.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const SelectStmt* edge = SVFUtil::cast<SelectStmt>(*iter);
+    //     for(const auto opVar : edge->getOpndVars()) {
+    //         // addCopyFCGEdge(opVar->getId(),edge->getResID());
+    //         NodeID src = opVar->getId();
+    //         NodeID dst = edge->getResID();
+    //         singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    //     }
+    // }
+
+    // SVFStmt::SVFStmtSetTy& calls = pag->getPTASVFStmtSet(SVFStmt::Call);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = calls.begin(), eiter =
+    //             calls.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const CallPE* edge = SVFUtil::cast<CallPE>(*iter);
+    //     // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    // }
+
+    // SVFStmt::SVFStmtSetTy& rets = pag->getPTASVFStmtSet(SVFStmt::Ret);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = rets.begin(), eiter =
+    //             rets.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const RetPE* edge = SVFUtil::cast<RetPE>(*iter);
+    //     // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    // }
+
+    // SVFStmt::SVFStmtSetTy& tdfks = pag->getPTASVFStmtSet(SVFStmt::ThreadFork);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = tdfks.begin(), eiter =
+    //             tdfks.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const TDForkPE* edge = SVFUtil::cast<TDForkPE>(*iter);
+    //     // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    // }
+
+    // SVFStmt::SVFStmtSetTy& tdjns = pag->getPTASVFStmtSet(SVFStmt::ThreadJoin);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = tdjns.begin(), eiter =
+    //             tdjns.end(); iter != eiter; ++iter)
+    // {
+    //     copycount++;
+    //     const TDJoinPE* edge = SVFUtil::cast<TDJoinPE>(*iter);
+    //     // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+    // }
+
+    // int gepcount = 0;
+    // SVFStmt::SVFStmtSetTy& ngeps = pag->getPTASVFStmtSet(SVFStmt::Gep);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = ngeps.begin(), eiter =
+    //             ngeps.end(); iter != eiter; ++iter)
+    // {
+    //     gepcount++;
+    //     GepStmt* edge = SVFUtil::cast<GepStmt>(*iter);
+    //     if(edge->isVariantFieldGep()) {
+    //         // addVariantGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+    //         NodeID src = edge->getRHSVarID();
+    //         NodeID dst = edge->getLHSVarID();
+    //         singleIncremental(src, dst, FConstraintEdge::FVariantGep, gepcount);
+    //     }
+    //     // else
+    //         // addNormalGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID(),edge->getAccessPath());
+    // }
+    // int storecount = 0;
+    // SVFStmt::SVFStmtSetTy& stores = pag->getPTASVFStmtSet(SVFStmt::Store);
+    // for (SVFStmt::SVFStmtSetTy::iterator iter = stores.begin(), eiter =
+    //             stores.end(); iter != eiter; ++iter)
+    // {
+    //     storecount ++;
+    //     StoreStmt* edge = SVFUtil::cast<StoreStmt>(*iter);
+    //     NodeID src = edge->getRHSVarID();
+    //     NodeID dst = edge->getLHSVarID();
+    //     singleIncremental(src, dst, FConstraintEdge::FStore, storecount);
+    // }
+    u32_t sr = Options::StartingRound();
+    u32_t spr = Options::SpecificRound();
+    int loadcount = 0;
     SVFStmt::SVFStmtSetTy& loads = pag->getPTASVFStmtSet(SVFStmt::Load);
     for (SVFStmt::SVFStmtSetTy::iterator iter = loads.begin(), eiter =
                 loads.end(); iter != eiter; ++iter)
     {
+        loadcount ++;
+        if (loadcount < sr)
+            continue; 
+        if (spr != 0 && spr != loadcount)
+            continue;
+        // if (count != 179) llvm-config.bc
+        //     continue;
+        // if (count > 179)
+        //     break;
+        // Incremental Analysis Round [193] not.bc
+        // if (loadcount != 193)
+        //     continue;
         LoadStmt* edge = SVFUtil::cast<LoadStmt>(*iter);
         NodeID src = edge->getRHSVarID();
         NodeID dst = edge->getLHSVarID();
-        delEdgesWL.clear();
-        insEdgeVec.clear();
-        insDirectEdgeVec.clear();
-        pushIntoDelEdgesWL(src, dst, FConstraintEdge::FLoad);
-        insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
-        count ++;
-        SVFUtil::outs() << "========== Incremental Analysis Round [" << count << "] ==========\n";
-        
-        double iptaStart = stat->getClk();
-        processDeletion();
-        double iptaMid = stat->getClk();
-        timeOfDeletionPTA += (iptaMid - iptaStart) / TIMEINTERVAL;
-        SVFUtil::outs() << "Time of deletion PTA: " << (iptaMid - iptaStart) / TIMEINTERVAL << "\n";
-        // timeOfDeletionPTA += (iptaMid - iptaStart);
-        // processInsertion_pseudo();
-        processInsertion();
-        double iptaEnd = stat->getClk();
-        // timeOfInsertionPTA += (iptaEnd - iptaMid);// / TIMEINTERVAL;
-        // timeOfIncrementalPTA += (iptaEnd - iptaStart);// / TIMEINTERVAL;
-        timeOfInsertionPTA += (iptaEnd - iptaMid) / TIMEINTERVAL;
-        SVFUtil::outs() << "Time of insertion PTA: " << (iptaEnd - iptaMid) / TIMEINTERVAL << "\n";
-        timeOfIncrementalPTA += (iptaEnd - iptaStart) / TIMEINTERVAL;
-        SVFUtil::outs() << "Time of incremental PTA: " << (iptaEnd - iptaStart) / TIMEINTERVAL << "\n";
-        
-        // if (count == 5)
-        //     break;
+        singleIncremental(src, dst, FConstraintEdge::FLoad, loadcount);
     }
 
     
@@ -190,6 +322,7 @@ void AndersenInc::cleanConsCG(NodeID id)
     sCG->resetSubs(id);
     sCG->resetRep(id);
     assert(!sCG->hasGNode(id) && "this is either a rep nodeid or a sub nodeid should have already been merged to its field-insensitive base! ");
+    // bug for llvm-perfectshuffle.bc nodeid 5876?
 }
 
 void AndersenInc::normalizePointsTo()
@@ -593,6 +726,7 @@ bool AndersenInc::collapseField(NodeID nodeId)
             // merge field node into base node, including edges and pts.
             NodeID fieldRepNodeId = sCG->sccRepNode(fieldId);
             mergeNodeToRep(fieldRepNodeId, baseRepNodeId);
+            field2Base[fieldRepNodeId] = baseRepNodeId;
             if (fieldId != baseRepNodeId)
             {
                 // gep node fieldId becomes redundant if it is merged to its base node who is set as field-insensitive
@@ -1167,7 +1301,9 @@ void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
     if (sSrcNode == sDstNode) {
         // Copy Edge in SCC
         NodeBS newReps;
-        NodeID oldRep;
+        NodeID oldRep = sSrcNode->getId();
+        const PointsTo& oldRepPts = getPts(oldRep); // save old rep pts before scc detect
+        // dumpPts(oldRepPts);
         bool sccStart = stat->getClk();
         unsigned sccKeep = sCG->sccBreakDetect(srcid, dstid, FConstraintEdge::FCopy, newReps, oldRep);
         bool sccEnd = stat->getClk();
@@ -1180,20 +1316,23 @@ void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
         // SCC Restore
         // SCC Restore should remove the fEdge and sEdge
         // reset Pts for new rep nodes
+        // dumpPts(getPts(oldRep));
         for (NodeID id: newReps) {
-            unionPts(id, getPts(oldRep));
+            unionPts(id, oldRepPts);
         }
         propagateDelPts(getPts(srcid), dstid);
     }
     else {
-        SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
-        // 
-        sCopy->removeFEdge(fCopy);
-        if (sCopy->getFEdgeSet().empty()) {
-            sCG->removeDirectEdge(sCopy);
-            propagateDelPts(getPts(sSrcNode->getId()), sDstNode->getId());
+        if (sCG->hasEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy))
+        {
+            SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
+            // 
+            sCopy->removeFEdge(fCopy);
+            if (sCopy->getFEdgeSet().empty()) {
+                sCG->removeDirectEdge(sCopy);
+                propagateDelPts(getPts(sSrcNode->getId()), sDstNode->getId());
+            }
         }
-
         fCG->removeDirectEdge(fCopy);
     }
 }
@@ -1502,24 +1641,31 @@ void AndersenInc::processDeletion()
             NodeID src = fEdge->getSrcID();
             NodeID dst = fEdge->getDstID();
             deletedEdgeCount ++;
+            
             if (SVFUtil::isa<AddrFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FAddr);
                 processAddrRemoval(src, dst);
             }
             else if (SVFUtil::isa<CopyFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FCopy);
                 processCopyRemoval(src, dst);
             }
             else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FVariantGep);
                 processVariantGepRemoval(src, dst);
             }
             else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FNormalGep);
                 NormalGepFCGEdge* ngep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
                 const AccessPath& ap = ngep->getAccessPath();
                 processNormalGepRemoval(src, dst, ap);
             }
             else if (SVFUtil::isa<StoreFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FStore);
                 processStoreRemoval(src, dst);
             }
             else if (SVFUtil::isa<LoadFCGEdge>(fEdge)) {
+                // dumpSDK(src, dst, FConstraintEdge::FLoad);
                 processLoadRemoval(src, dst);
             }
         }
@@ -1582,6 +1728,66 @@ void AndersenInc::computeFpPDM() {
         pd->nowPts.clear();
         pd->nowPts |= ptsnow;
     }
+}
+
+void AndersenInc::initAllPDM()
+{
+    OrderedNodeSet pagNodes;
+    for(SVFIR::iterator it = pag->begin(), eit = pag->end(); it!=eit; it++)
+    {
+        pagNodes.insert(it->first);
+    }
+
+    for (NodeID n : pagNodes)
+    {
+        PtsDiff* pd = new PtsDiff;
+        pd->nodeId = n;
+        pd->prePts = getPts(n);
+        allPtsDiffMap[n] = pd;
+    }
+}
+
+void AndersenInc::computeAllPDM()
+{
+    OrderedNodeSet pagNodes;
+    for(SVFIR::iterator it = pag->begin(), eit = pag->end(); it!=eit; it++)
+    {
+        pagNodes.insert(it->first);
+    }
+
+    for (auto iter = allPtsDiffMap.begin(), eiter = allPtsDiffMap.end(); 
+        iter != eiter; ++iter)
+    {
+        NodeID n = iter->first;
+        PtsDiff* pd = iter->second;
+
+        const PointsTo& prepts = pd->prePts;
+        const PointsTo& incpts = getPts(n);
+
+        if (prepts == incpts)
+        {
+            pd->delPts.clear();
+            pd->insPts.clear();
+        }
+        else {
+            pd->delPts = prepts - incpts;
+            pd->insPts = incpts - prepts;
+            SVFUtil::outs() << "@@ Pts Diff @@: " << n << "\n";
+            SVFUtil::outs() << "@@@ delPts: ";
+            dumpPts(pd->delPts);
+            SVFUtil::outs() << "@@@ insPts: ";
+            dumpPts(pd->insPts);
+            SVFUtil::outs() << "@@@@@@@@@@@@@@@@@@@@@@@@@@@\n";
+        }
+    }
+}
+
+void AndersenInc::dumpPts(const PointsTo& pts)
+{
+    SVFUtil::outs() << "{ " ;
+    for(NodeID o: pts)
+        SVFUtil::outs() << o << ", ";
+    SVFUtil::outs() << "}\n" ;
 }
 
 bool AndersenInc::updateCallGraphDel(const CallSiteToFunPtrMap& callsites)
@@ -1932,10 +2138,13 @@ void AndersenInc::processInsertion()
 {
     initFpPDM();
     bool newCallCopyEdge = false;
+    bool needSCCDetect = false;
     do {
         newCallCopyEdge = false;
+        needSCCDetect = false;
         int insDirectEdgeCount = 0, insEdgeCount = 0;
         // process direct edge insertion
+        
         while (!insDirectEdgeVec.empty()) {
             SDK* sdk = insDirectEdgeVec.back();
             insDirectEdgeVec.pop_back();
@@ -1943,31 +2152,35 @@ void AndersenInc::processInsertion()
             NodeID src = sdk->src;
             NodeID dst = sdk->dst;
             FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            FConstraintEdge* compEdge = sdk->compEdge;
+            // dumpSDK(src, dst, kind);
             if (kind == FConstraintEdge::FCopy)
-                processCopyAddition(src, dst);
+                needSCCDetect |= processCopyAddition(src, dst, compEdge);
             else if (kind == FConstraintEdge::FVariantGep)
-                processVariantGepAddition(src, dst);
+                needSCCDetect |= processVariantGepAddition(src, dst);
             else if (kind == FConstraintEdge::FNormalGep) {
                 const AccessPath& ap = sdk->ap;
-                processNormalGepAddition(src, dst, ap);
+                needSCCDetect |= processNormalGepAddition(src, dst, ap);
             }
             delete sdk;
         }
         SVFUtil::outs() << "Inserted DirectEdge Num: " << insDirectEdgeCount << "\n";
-
-        SCCDetect();
         
+        if (needSCCDetect)
+            SCCDetect();
+
         // process simple and complex Constraint
         while (!insEdgeVec.empty()) {
             SDK* sdk = insEdgeVec.back();
             insEdgeVec.pop_back();
-            insEdgeCount ++;
-
+            
             NodeID src = sdk->src;
             NodeID dst = sdk->dst;
             FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            // dumpSDK(src, dst, kind);
             if (kind == FConstraintEdge::FAddr) {
                 processAddrAddition(src, dst);
+                insEdgeCount ++;
             }
             else if (kind == FConstraintEdge::FCopy) {
                 processCopyConstraintAddition(src, dst);
@@ -1981,9 +2194,11 @@ void AndersenInc::processInsertion()
             }
             else if (kind == FConstraintEdge::FStore) {
                 processStoreAddition(src, dst);
+                insEdgeCount ++;
             }
             else if (kind == FConstraintEdge::FLoad) {
                 processLoadAddition(src, dst);
+                insEdgeCount ++;
             }
             delete sdk;
         }
@@ -2074,7 +2289,7 @@ bool AndersenInc::processStoreAddition(NodeID srcid, NodeID dstid)
     return newSEdge;
 }
 
-void AndersenInc::processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge)
+bool AndersenInc::processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge)
 {
     bool newSEdge = false;
 
@@ -2086,29 +2301,32 @@ void AndersenInc::processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdg
     newSEdge |= (nullptr != sCG->addCopySCGEdge(srcid, dstid));
     if (newSEdge)
         insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+    return newSEdge;
 }
 
-void AndersenInc::processVariantGepAddition(NodeID srcid, NodeID dstid)
+bool AndersenInc::processVariantGepAddition(NodeID srcid, NodeID dstid)
 {
     bool newSEdge = false;
     fCG->addVariantGepFCGEdge(srcid, dstid);
     newSEdge |= (nullptr != sCG->addVariantGepSCGEdge(srcid, dstid));
     if (newSEdge)
         insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
+    return newSEdge;
 }
 
-void AndersenInc::processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap)
+bool AndersenInc::processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap)
 {
     bool newSEdge = false;
     fCG->addNormalGepFCGEdge(srcid, dstid, ap);
     newSEdge |= (nullptr != sCG->addNormalGepSCGEdge(srcid, dstid, ap));
     if (newSEdge)
         insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+    return newSEdge;
 }
 
 void AndersenInc::processCopyConstraintAddition(NodeID srcid, NodeID dstid)
 {
-    propagateInsPts(getPts(srcid), dstid);
+    propagateInsPts(getPts(srcid), dstid, sccRepNode(srcid) == sccRepNode(dstid));
 }
 
 void AndersenInc::processVariantGepConstraintAddition(NodeID srcid, NodeID dstid)
@@ -2123,7 +2341,7 @@ void AndersenInc::processVariantGepConstraintAddition(NodeID srcid, NodeID dstid
         NodeID baseId = sCG->getFIObjVar(o);
         ptsChange.set(baseId);
     }
-    propagateInsPts(ptsChange, dstid);
+    propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid));
 }
 
 void AndersenInc::processNormalGepConstraintAddition(NodeID srcid, NodeID dstid, const AccessPath& ap)
@@ -2138,19 +2356,23 @@ void AndersenInc::processNormalGepConstraintAddition(NodeID srcid, NodeID dstid,
         NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
         ptsChange.set(fieldSrcPtdNode);
     }
-    propagateInsPts(ptsChange, dstid);
+    propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid));
 }
 
-void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId)
+void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameSCC)
 {
+    
     PointsTo oriPts, dPts;
     oriPts |= pts;
     dPts |= pts;
-    // Filter 1: dPts = dPts - (dPts \intersect pts(nodeId))
-    oriPts &= getPts(nodeId); // oriPts = dPts \intersect pts(nodeId)
-    dPts -= oriPts; // dPts = dPts - oriPts
-    if (dPts.empty())
-        return;
+    
+    if (!sameSCC) {
+        // Filter 1: dPts = dPts - (dPts \intersect pts(nodeId))
+        oriPts &= getPts(nodeId); // oriPts = dPts \intersect pts(nodeId)
+        dPts -= oriPts; // dPts = dPts - oriPts
+        if (dPts.empty())
+            return;
+    }
     
     // pts(nodeId) = pts(nodeId) U dPts
     unionPts(nodeId, dPts); 
@@ -2223,7 +2445,7 @@ void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId)
             for (FConstraintEdge* fStore: sStore->getFEdgeSet()) 
             {
                 NodeID storeSrc = fStore->getSrcID();
-                insDirectEdgeVec.push_back(new SDK(storeSrc, o, FConstraintEdge::FStore, fStore));
+                insDirectEdgeVec.push_back(new SDK(storeSrc, o, FConstraintEdge::FCopy, fStore));
                 // fCG->addCopyFCGEdge(storeSrc, o, fStore);
                 // newSEdge |= (nullptr != sCG->addCopySCGEdge(storeSrc, o));
                 // insEdgeVec.push_back(
@@ -2473,4 +2695,55 @@ void AndersenInc::connectCaller2CalleeParamsIns(CallSite cs, const SVFFunction* 
             writeWrnMsg("(" + cs.getInstruction()->getSourceLoc() + ")");
         }
     }
+}
+
+void AndersenInc::dumpSDK(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)
+{
+    std::string kstr;
+    if (kind == FConstraintEdge::FCopy)
+        kstr = "Copy";
+    else if (kind == FConstraintEdge::FAddr)
+        kstr = "Addr";
+    else if (kind == FConstraintEdge::FLoad)
+        kstr = "Load";
+    else if (kind == FConstraintEdge::FStore)
+        kstr = "Store";
+    else if (kind == FConstraintEdge::FVariantGep)
+        kstr = "VGep";
+    else if (kind == FConstraintEdge::FNormalGep)
+        kstr = "NGep";
+    SVFUtil::outs() << "Edge: " << src << " --" << kstr << "--> " << dst << "\n";
+}
+
+void AndersenInc::singleIncremental(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind, int count)
+{
+    delEdgesWL.clear();
+    insEdgeVec.clear();
+    insDirectEdgeVec.clear();
+    pushIntoDelEdgesWL(srcid, dstid, kind);
+    insEdgeVec.push_back(new SDK(srcid, dstid, kind));
+    SVFUtil::outs() << "========== Incremental Analysis Round [" << count << "] ==========\n";
+    dumpSDK(srcid, dstid, kind);
+    
+    double iptaStart = stat->getClk();
+    processDeletion();
+    double iptaMid = stat->getClk();
+    timeOfDeletionPTA += (iptaMid - iptaStart) / TIMEINTERVAL;
+    // computeAllPDM();//
+    SVFUtil::outs() << "Time of deletion PTA: " << (iptaMid - iptaStart) / TIMEINTERVAL << "\n";
+    // 
+    if (Options::Pseudo())
+        processInsertion_pseudo();
+    else
+        processInsertion();
+    double iptaEnd = stat->getClk();
+
+    timeOfInsertionPTA += (iptaEnd - iptaMid) / TIMEINTERVAL;
+    SVFUtil::outs() << "Time of insertion PTA: " << (iptaEnd - iptaMid) / TIMEINTERVAL << "\n";
+
+    timeOfIncrementalPTA += (iptaEnd - iptaStart) / TIMEINTERVAL;
+    SVFUtil::outs() << "Time of incremental PTA: " << (iptaEnd - iptaStart) / TIMEINTERVAL << "\n";
+    
+    // normalizePointsTo();
+    computeAllPDM();
 }

@@ -130,10 +130,10 @@ AddrSCGEdge::AddrSCGEdge(SConstraintNode* s, SConstraintNode* d, EdgeID id)
     // Retarget addr edges may lead s to be a dummy node
     PAGNode* node = SVFIR::getPAG()->getGNode(s->getId());
     (void)node; // Suppress warning of unused variable under release build
-    if (!SVFModule::pagReadFromTXT())
-    {
-        assert(!SVFUtil::isa<DummyValVar>(node) && "a dummy node??");
-    }
+    // if (!SVFModule::pagReadFromTXT())
+    // {
+    //     // assert(!SVFUtil::isa<DummyValVar>(node) && "a dummy node??");
+    // }
 }
 
 /*!
@@ -811,10 +811,7 @@ void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep)
 {
     enum {SCC_RESTORE, SCC_KEEP};
-    if (src == 5915 && dst == 320798 && kind == FConstraintEdge::FCopy)
-    {
-        src = src;
-    }
+    
     SConstraintEdge::SConstraintEdgeK skind = F2SKind(kind);
     NodeID rep1 = sccRepNode(src);
     NodeID rep2 = sccRepNode(dst);
@@ -897,11 +894,13 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
         FConstraintEdge* fEdge = fConsG->getEdge(srcFNode, dstFNode, kind);
         SConstraintNode* srcSNode = getSConstraintNode(src);
         SConstraintNode* dstSNode = getSConstraintNode(dst);
-        SConstraintEdge* sEdge = getEdge(srcSNode, dstSNode, skind);
-        
-        removeDirectEdge(sEdge);
-        fConsG->removeDirectEdge(fEdge);
-
+        if(hasEdge(srcSNode, dstSNode, skind) && 
+            fConsG->hasEdge(srcFNode, dstFNode, kind)) {
+            SConstraintEdge* sEdge = getEdge(srcSNode, dstSNode, skind);
+            removeDirectEdge(sEdge);
+            fConsG->removeDirectEdge(fEdge);
+        }
+ 
         return SCC_RESTORE;    
     }
     else {

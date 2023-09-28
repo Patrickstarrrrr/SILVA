@@ -891,4 +891,21 @@ const Option<u32_t> Options::LoopBound(
     1
 );
 
+const Option<bool> Options::Pseudo(
+    "pseudo",
+    "Pseudo incremental analysis.",
+    false
+);
+
+const Option<u32_t> Options::StartingRound(
+    "starting-round",
+    "Starting point for incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::SpecificRound(
+    "specific-round",
+    "Specific point for incremental analysis rounds.",
+    0
+);
 } // namespace SVF.

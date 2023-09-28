@@ -272,6 +272,11 @@ public:
     // Loop Analysis
     static const Option<bool> LoopAnalysis;
     static const Option<u32_t> LoopBound;
+
+    // Inc SVF
+    static const Option<bool> Pseudo;
+    static const Option<u32_t> StartingRound;
+    static const Option<u32_t> SpecificRound;
 };
 }  // namespace SVF
 

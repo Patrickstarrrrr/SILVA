@@ -15,12 +15,14 @@ public:
     FConstraintEdge::FConstraintEdgeK kind;
     AccessPath ap;
     FConstraintEdge* compEdge;
-    SDK(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, FConstraintEdge* ce = nullptr)
+    bool byComplex;
+    SDK(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, FConstraintEdge* ce = nullptr, bool bc = false)
     {
         src = s;
         dst = d;
         kind = k;
         compEdge = ce;
+        byComplex = bc;
     }
     SDK(NodeID s, NodeID d, FConstraintEdge::FConstraintEdgeK k, const AccessPath& ap_)
     {
@@ -29,6 +31,7 @@ public:
         kind = k;
         ap = ap_;
         compEdge = nullptr;
+        byComplex = false;
     }
     ~SDK(){}
 };
@@ -130,6 +133,12 @@ public:
     static double timeOfInsertionPTA;
 
     static double timeOfDeletionSCC;
+    static double timeOfInsertionSCC;
+    static double timeOfDeletionProp;
+    static double timeOfInsertionProp;
+
+    static double timeOfDelComputeFP;
+    static double timeOfInsComputeFP;
 
     //@}
     typedef SCCDetection<SConstraintGraph*> CGSCC;
@@ -341,7 +350,8 @@ public:
         PointsTo insPts;
         PointsTo delPts;
     };
-    typedef std::unordered_map<NodeID, PtsDiff *> PtsDiffMap;
+    typedef std::unordered_map<NodeID, PtsDiff*> PtsDiffMap;
+    typedef std::unordered_map<NodeID, std::set<SDK*>> RepEdgeSetMap;
 
 private:
     // std::vector<SrcDstKind *> delEdgesVec;  // deleted constraintEdges:(src, dst, edgeKind)
@@ -351,6 +361,10 @@ private:
     FIFOWorkList<FConstraintEdge *> insPropWL;
     std::vector<SDK*> insEdgeVec;
     std::vector<SDK*> insDirectEdgeVec;
+    std::vector<SDK*> delEdgeVec;
+    std::vector<SDK*> delDirectEdgeVec;
+    FIFOWorkList<NodeID> redetectReps;
+    RepEdgeSetMap rep2EdgeSet;
     PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
     PtsDiffMap allPtsDiffMap; // all ptr pts diff
 
@@ -364,13 +378,17 @@ private:
     /// handling deletion
     //@{
     void processDeletion();
+    void processDeletion_EdgeConstraint();
     // void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
     void processLoadRemoval(NodeID srcid, NodeID dstid);
     void processStoreRemoval(NodeID srcid, NodeID dstid);
     void processAddrRemoval(NodeID srcid, NodeID dstid);
     void processCopyRemoval(NodeID srcid, NodeID dstid);
+    bool processCopyEdgeRemoval(NodeID srcid, NodeID dstid, bool byComplex = false);
+    void processCopyConstraintRemoval(NodeID srcid, NodeID dstid);
     void processVariantGepRemoval(NodeID srcid, NodeID dstid);
     void processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processSCCRedetection();
     void propagateDelPts(const PointsTo& pts, NodeID nodeId);
 
     void initFpPDM();

@@ -897,15 +897,112 @@ const Option<bool> Options::Pseudo(
     false
 );
 
-const Option<u32_t> Options::StartingRound(
-    "starting-round",
-    "Starting point for incremental analysis rounds.",
+const Option<bool> Options::IncStore(
+    "store",
+    "Incremental analysis for store constraints",
+    false
+);
+
+const Option<bool> Options::IncLoad(
+    "load",
+    "Incremental analysis for load constraints",
+    false
+);
+
+const Option<bool> Options::IncCopy(
+    "copy",
+    "Incremental analysis for copy constraints",
+    false
+);
+
+const Option<bool> Options::IncAddr(
+    "addr",
+    "Incremental analysis for address constraints",
+    false
+);
+
+const Option<bool> Options::IncNGep(
+    "ngep",
+    "Incremental analysis for normal gep constraints",
+    false
+);
+
+const Option<bool> Options::IncVGep(
+    "vgep",
+    "Incremental analysis for variant gep constraints",
+    false
+);
+
+const Option<u32_t> Options::AddrStartingRound(
+    "addr-starting-round",
+    "Starting point for addr incremental analysis rounds.",
     1
 );
 
-const Option<u32_t> Options::SpecificRound(
-    "specific-round",
-    "Specific point for incremental analysis rounds.",
+const Option<u32_t> Options::AddrSpecificRound(
+    "addr-specific-round",
+    "Specific point for addr incremental analysis rounds.",
     0
 );
+
+const Option<u32_t> Options::CopyStartingRound(
+    "copy-starting-round",
+    "Starting point for copy incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::CopySpecificRound(
+    "copy-specific-round",
+    "Specific point for copy incremental analysis rounds.",
+    0
+);
+
+const Option<u32_t> Options::LoadStartingRound(
+    "load-starting-round",
+    "Starting point for load incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::LoadSpecificRound(
+    "load-specific-round",
+    "Specific point for load incremental analysis rounds.",
+    0
+);
+
+const Option<u32_t> Options::StoreStartingRound(
+    "store-starting-round",
+    "Starting point for store incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::StoreSpecificRound(
+    "store-specific-round",
+    "Specific point for store incremental analysis rounds.",
+    0
+);
+
+const Option<u32_t> Options::VGepStartingRound(
+    "vgep-starting-round",
+    "Starting point for variant gep incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::VGepSpecificRound(
+    "vgep-specific-round",
+    "Specific point for variant gep incremental analysis rounds.",
+    0
+);
+
+const Option<u32_t> Options::NGepStartingRound(
+    "ngep-starting-round",
+    "Starting point for normal gep incremental analysis rounds.",
+    1
+);
+
+const Option<u32_t> Options::NGepSpecificRound(
+    "ngep-specific-round",
+    "Specific point for normal gep incremental analysis rounds.",
+    0
+);
+
 } // namespace SVF.

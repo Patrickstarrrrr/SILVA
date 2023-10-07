@@ -808,6 +808,104 @@ void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 /*
  * SCC break detection after a direct edge removal
  */
+unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps)
+{
+    enum {SCC_RESTORE, SCC_KEEP};
+
+    SConstraintNode* originRepNode = getSConstraintNode(rep);
+    rep = originRepNode->getId();
+
+    ConstraintGraph* tempG = buildTempG(rep);
+    SCCDetection<ConstraintGraph*> d(tempG);
+    d.find();
+    delete tempG;
+    NodeStack& topoOrder = d.topoNodeStack();
+    if (topoOrder.size() > 1) {
+        // 1. reset rep/sub relation
+        NodeBS allSubs = sccSubNodes(rep);
+        resetSubs(rep);
+        for (NodeID sub: allSubs)
+            resetRep(sub);
+
+        while (!topoOrder.empty())
+        {
+            NodeID repNodeId = topoOrder.top();
+            topoOrder.pop();
+
+            // collect new reps
+            allReps.set(repNodeId);
+
+            // {@ set new rep/sub relation
+            const NodeBS& subNodes = d.subNodes(repNodeId);
+            NodeBS subNodesNotConst;
+            for (NodeBS::iterator nodeIt = subNodes.begin(); nodeIt != subNodes.end(); nodeIt++)
+            {
+                
+                NodeID subNodeId = *nodeIt;
+                subNodesNotConst.set(subNodeId);
+                if (subNodeId != repNodeId)
+                {
+                    setRep(subNodeId, repNodeId);
+                    // subNodeId has no subs node
+                }
+            }
+            setSubs(repNodeId, subNodesNotConst);
+            // @}
+        }
+
+        // 2. restore sconstraint node
+        for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
+        {
+            NodeID eachRep = *nodeIt;
+
+            // Add new rep node into SCG
+            if (eachRep != rep)
+                addSConstraintNode(new SConstraintNode(eachRep), eachRep);
+        }
+        
+        // 3. restore sconstriant edge for each new rep node
+        /// 3.1 collect all sEdges and fEdges;
+        /// 3.2 remove sEdges
+        /// 3.3 add fEdges
+        // for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
+        // {
+        //     NodeID eachRep = *nodeIt;
+        //     SConstraintNode* repNode = getSConstraintNode(eachRep);
+        //     restoreEdge(repNode);
+        // }
+        restoreEdge(originRepNode);
+        if (!allReps.test(rep))
+            removeSConstraintNode(originRepNode);
+
+        // 4. remove target fEdge and sEdge
+        // FConstraintNode* srcFNode = fConsG->getFConstraintNode(src);
+        // FConstraintNode* dstFNode = fConsG->getFConstraintNode(dst);
+        // FConstraintEdge* fEdge = fConsG->getEdge(srcFNode, dstFNode, kind);
+        // SConstraintNode* srcSNode = getSConstraintNode(src);
+        // SConstraintNode* dstSNode = getSConstraintNode(dst);
+        // if(hasEdge(srcSNode, dstSNode, skind) && 
+        //     fConsG->hasEdge(srcFNode, dstFNode, kind)) {
+        //     SConstraintEdge* sEdge = getEdge(srcSNode, dstSNode, skind);
+        //     removeDirectEdge(sEdge);
+        //     fConsG->removeDirectEdge(fEdge);
+        // }
+ 
+        return SCC_RESTORE;  
+    }
+    else {
+        // SCC keep
+        // SConstraintNode* repSNode = getSConstraintNode(rep);
+        // SConstraintEdge* sEdge = getEdge(repSNode, repSNode, skind);
+        // FConstraintNode* srcFNode = fConsG->getFConstraintNode(src);
+        // FConstraintNode* dstFNode = fConsG->getFConstraintNode(dst);
+        // FConstraintEdge* fEdge = fConsG->getEdge(srcFNode, dstFNode, kind);
+        // // NOTE: remove the edge in both fCG and SCG;
+        // sEdge->removeFEdge(fEdge);
+        // fConsG->removeDirectEdge(fEdge);
+        return SCC_KEEP;
+    }
+
+}
 unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep)
 {
     enum {SCC_RESTORE, SCC_KEEP};
@@ -825,7 +923,7 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
     SCCDetection<ConstraintGraph*> d(tempG);
     d.find();
     delete tempG;
-    NodeStack & topoOrder = d.topoNodeStack();
+    NodeStack& topoOrder = d.topoNodeStack();
     if (topoOrder.size() > 1) {
         // TODO: ReDetect the sub scc --wjy
         // SCC broken
@@ -917,6 +1015,41 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID src, NodeID dst, FConstraintEdg
     }
     
     
+}
+
+ConstraintGraph* SConstraintGraph::buildTempG(NodeID rep)
+{
+    ConstraintGraph* g = new ConstraintGraph();
+    SConstraintNode* repSNode = getSConstraintNode(rep);
+
+    NodeBS nodes;
+    nodes.set(rep);
+    nodes |= sccSubNodes(rep);
+    for (NodeID nodeId: nodes)
+        g->addConstraintNode(new ConstraintNode(nodeId), nodeId);
+    
+    for (auto it = repSNode->directOutEdgeBegin(), eit = repSNode->directOutEdgeEnd();
+        it != eit; ++it)
+    {
+        SConstraintEdge* sEdge = *it;
+        if (sEdge->getDstID() == rep) {
+            for (FConstraintEdge* fEdge: sEdge->getFEdgeSet()) {
+                NodeID fsrc = fEdge->getSrcID();
+                NodeID fdst = fEdge->getDstID();
+                if (SVFUtil::isa<CopyFCGEdge>(fEdge)) {
+                    g->addCopyCGEdge(fsrc, fdst);
+                }
+                else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
+                    NormalGepFCGEdge* fgep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
+                    g->addNormalGepCGEdge(fsrc, fdst, fgep->getAccessPath());
+                }
+                else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge)) {
+                    g->addVariantGepCGEdge(fsrc, fdst);
+                }
+            }
+        }
+    }
+    return g;
 }
 
 ConstraintGraph* SConstraintGraph::buildTempG(NodeID rep, NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)

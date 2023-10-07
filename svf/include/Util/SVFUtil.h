@@ -156,6 +156,14 @@ typedef struct equalNodeBS
     }
 } equalNodeBS;
 
+// typedef struct equalSDK
+// {
+//     ool operator()(const SDK& lhs, const SDK& rhs) const
+//     {
+//         return SVFUtil::cmpNodeBS(lhs, rhs);
+//     }
+// } equalSDK
+
 inline NodeBS ptsToNodeBS(const PointsTo &pts)
 {
     NodeBS nbs;

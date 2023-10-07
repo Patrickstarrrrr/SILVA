@@ -275,8 +275,24 @@ public:
 
     // Inc SVF
     static const Option<bool> Pseudo;
-    static const Option<u32_t> StartingRound;
-    static const Option<u32_t> SpecificRound;
+    static const Option<bool> IncAddr;
+    static const Option<bool> IncCopy;
+    static const Option<bool> IncVGep;
+    static const Option<bool> IncNGep;
+    static const Option<bool> IncStore;
+    static const Option<bool> IncLoad;
+    static const Option<u32_t> AddrStartingRound;
+    static const Option<u32_t> AddrSpecificRound;
+    static const Option<u32_t> CopyStartingRound;
+    static const Option<u32_t> CopySpecificRound;
+    static const Option<u32_t> VGepStartingRound;
+    static const Option<u32_t> VGepSpecificRound;
+    static const Option<u32_t> NGepStartingRound;
+    static const Option<u32_t> NGepSpecificRound;
+    static const Option<u32_t> StoreStartingRound;
+    static const Option<u32_t> StoreSpecificRound;
+    static const Option<u32_t> LoadStartingRound;
+    static const Option<u32_t> LoadSpecificRound;
 };
 }  // namespace SVF
 

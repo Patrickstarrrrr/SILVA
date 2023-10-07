@@ -235,7 +235,9 @@ public:
     void removeStoreEdge(StoreSCGEdge* edge);
     /// SCC break detection
     unsigned sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep);
+    unsigned sccBreakDetect(NodeID rep, NodeBS& allReps);
     ConstraintGraph* buildTempG(NodeID rep, NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+    ConstraintGraph* buildTempG(NodeID rep);
     void sccRestore(NodeID rep);
     void restoreEdge(SConstraintNode* repNode);
     void restoreAddr(SConstraintNode* repNode);

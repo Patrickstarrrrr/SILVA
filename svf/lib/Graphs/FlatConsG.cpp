@@ -161,10 +161,10 @@ AddrFCGEdge* FConstraintGraph::addAddrFCGEdge(NodeID src, NodeID dst)
  */
 CopyFCGEdge* FConstraintGraph::addCopyFCGEdge(NodeID src, NodeID dst, FConstraintEdge* complexEdge)
 {
+    if (src == dst)
+        return nullptr;
     FConstraintNode* srcNode = getFConstraintNode(src);
     FConstraintNode* dstNode = getFConstraintNode(dst);
-    if (srcNode == dstNode)
-        return nullptr;
     if (complexEdge == nullptr) {
         // Copy added via buildFCG
         if (hasEdge(srcNode, dstNode, FConstraintEdge::FCopy))

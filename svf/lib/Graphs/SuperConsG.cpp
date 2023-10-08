@@ -193,13 +193,15 @@ AddrSCGEdge* SConstraintGraph::removeAddrSCGEdgeByFlat(NodeID src, NodeID dst)
  */
 CopySCGEdge* SConstraintGraph::addCopySCGEdge(NodeID src, NodeID dst, bool isRestore)
 {
+    if (src == dst)
+        return nullptr;
     SConstraintNode* srcNode = getSConstraintNode(src);
     SConstraintNode* dstNode = getSConstraintNode(dst);
     FConstraintNode* fSrcNode = fConsG->getFConstraintNode(src);
     FConstraintNode* fDstNode = fConsG->getFConstraintNode(dst);
     FConstraintEdge* fEdge = fConsG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
-    if ((srcNode == dstNode) && (!isRestore))
-        return nullptr;
+    // if ((srcNode == dstNode) && (!isRestore))
+    //     return nullptr;
     if (hasEdge(srcNode, dstNode, SConstraintEdge::SCopy)) {
         // add flat edge 
         SConstraintEdge* sEdge = getEdge(srcNode, dstNode, SConstraintEdge::SCopy);

@@ -562,7 +562,7 @@ bool AndersenInc::processStore(NodeID node, const SConstraintEdge* store)
 bool AndersenInc::addCopyEdgeByComplexEdge(NodeID fsrc, NodeID fdst, FConstraintEdge* complexEdge)
 {
     fCG->addCopyFCGEdge(fsrc, fdst, complexEdge);
-    if (sCG->addCopySCGEdge(fsrc, fdst))
+    if (sCG->addCopySCGEdge(fsrc, fdst, true))
     {
         updatePropaPts(fsrc, fdst);
         return true;
@@ -1369,7 +1369,7 @@ void AndersenInc::processSCCRedetection()
         else {
             // SCC Restore
             for (NodeID id: newReps)
-                unionPts(id, oldRep);
+                unionPts(id, oldRepPts);
             for (SDK* sdk: rep2EdgeSet[oldRep]) {
                 if (sCG->getSConstraintNode(sdk->src) == sCG->getSConstraintNode(sdk->dst)) {
                     delete sdk;
@@ -1382,9 +1382,8 @@ void AndersenInc::processSCCRedetection()
     }
 }
 
-bool AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid, bool byComplex)
+void AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid)
 {
-    bool newSEdge = false;
     FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
     FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
     FConstraintEdge* fCopy = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
@@ -1398,7 +1397,7 @@ bool AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid, bool byComp
         // not empty, original copy removal (remove self complex constraint)
         copyFCGEdge->removeComplexEdge(fCopy);
         if (! copyFCGEdge->getComplexEdgeSet().empty())
-            return false; // do nothing if the complex set is still not empty
+            return; // do nothing if the complex set is still not empty
     }
     // The complex set is empty, then the copyEdge should be removed.
     SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
@@ -1411,17 +1410,16 @@ bool AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid, bool byComp
         NodeID repId = sSrcNode->getId();
         redetectReps.push(repId);
         rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FCopy));
-        return true;
+        return;
     }
     else {
         // Copy Edge not in SCC
         if (sCopy->getFEdgeSet().empty()) {
             sCG->removeDirectEdge(sCopy);
             delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
-            return true;
+            return;
         }
     }
-    return false;
 }
 
 void AndersenInc::processCopyConstraintRemoval(NodeID srcid, NodeID dstid)
@@ -1487,6 +1485,49 @@ void AndersenInc::processCopyRemoval(NodeID srcid, NodeID dstid)
     }
 }
 
+
+void AndersenInc::processVariantGepEdgeRemoval(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sVGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SVariantGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fVGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FVariantGep);
+    sVGep->removeFEdge(fVGep);
+    fCG->removeDirectEdge(fVGep);
+    if (sSrcNode == sDstNode) {
+        // Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        redetectReps.push(repId);
+        rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
+        return;
+    }
+    else {
+        // Edge not in SCC
+        if (sVGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sVGep);
+            delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
+            return;
+        }
+    }
+}
+
+void AndersenInc::processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid)
+{
+    PointsTo tmpPts;
+    for (NodeID o: getPts(srcid)) {
+        if (sCG->isBlkObjOrConstantObj(o))
+        {
+            tmpPts.set(o);
+            continue;
+        }
+
+        NodeID baseId = sCG->getFIObjVar(o);
+        tmpPts.set(baseId);
+    }
+    propagateDelPts(tmpPts, dstid);
+}
 /*
  * s --VGep--> d
  * pts(d) = pts(d) \Union FI(pts(s))
@@ -1565,6 +1606,50 @@ void AndersenInc::processVariantGepRemoval(NodeID srcid, NodeID dstid)
 
         fCG->removeDirectEdge(fVGep);
     }
+}
+
+void AndersenInc::processNormalGepEdgeRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sNGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SNormalGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fNGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FNormalGep);
+    sNGep->removeFEdge(fNGep);
+    fCG->removeDirectEdge(fNGep);
+    if (sSrcNode == sDstNode) {
+        // Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        redetectReps.push(repId);
+        rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+        return;
+    }
+    else {
+        // Edge not in SCC
+        if (sNGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sNGep);
+            delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+            return;
+        }
+    }
+}
+
+void AndersenInc::processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    PointsTo tmpPts;
+    for (NodeID o : getPts(srcid))
+    {
+        if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+        {
+            tmpPts.set(o);
+            continue;
+        }
+        NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+        tmpPts.set(fieldSrcPtdNode);
+    }
+
+    propagateDelPts(tmpPts, dstid);
 }
 
 /*
@@ -1812,12 +1897,13 @@ void AndersenInc::processDeletion_EdgeConstraint()
             if (kind == FConstraintEdge::FCopy)
                 // needSCCDetect |= 
                 processCopyEdgeRemoval(src, dst);
-            // else if (kind == FConstraintEdge::FVariantGep) {
-
-            // }
-            // else if (kind == FConstraintEdge::FNormalGep) {
-
-            // }
+            else if (kind == FConstraintEdge::FVariantGep) {
+                processVariantGepEdgeRemoval(src, dst);
+            }
+            else if (kind == FConstraintEdge::FNormalGep) {
+                const AccessPath& ap = sdk->ap;
+                processNormalGepEdgeRemoval(src, dst, ap);
+            }
             delete sdk;
         }
         SVFUtil::outs() << "Deleted DirectEdge Num: " << delDirectEdgeCount << "\n";
@@ -1840,13 +1926,11 @@ void AndersenInc::processDeletion_EdgeConstraint()
                 processCopyConstraintRemoval(src, dst);
             }
             else if (kind == FConstraintEdge::FVariantGep) {
-                // processVariantGepConstraintAddition(src, dst);
-                ;
+                processVariantGepConstraintRemoval(src, dst);
             }
             else if (kind == FConstraintEdge::FVariantGep) {
                 const AccessPath& ap = sdk->ap;
-                // processNormalGepConstraintAddition(src, dst, ap);
-                ;
+                processNormalGepConstraintRemoval(src, dst, ap);
             }
             else if (kind == FConstraintEdge::FStore) {
                 processStoreRemoval(src, dst);
@@ -2350,7 +2434,7 @@ void AndersenInc::processAddrAddition_pseudo(NodeID srcid, NodeID dstid)
 void AndersenInc::processCopyAddition_pseudo(NodeID srcid, NodeID dstid)
 {
     fCG->addCopyFCGEdge(srcid, dstid);
-    if (sCG->addCopySCGEdge(srcid, dstid))
+    if (sCG->addCopySCGEdge(srcid, dstid, true))
         updatePropaPts(srcid, dstid);
 }
 
@@ -2538,7 +2622,7 @@ bool AndersenInc::processStoreAddition(NodeID srcid, NodeID dstid)
 
             insDirectEdgeVec.push_back(new SDK(storeSrc, o, FConstraintEdge::FCopy, fStore));
             // fCG->addCopyFCGEdge(storeSrc, o, fStore);
-            // newSEdge |= (nullptr != sCG->addCopySCGEdge(storeSrc, o));
+            // newSEdge |= (nullptr != sCG->(storeSrc, o));
             // insEdgeVec.push_back(
             //     new SDK(storeSrc, o, FConstraintEdge::FCopy, fStore));
         }
@@ -2557,7 +2641,7 @@ bool AndersenInc::processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdg
     else
         fCG->addCopyFCGEdge(srcid, dstid, complexEdge);
 
-    newSEdge |= (nullptr != sCG->addCopySCGEdge(srcid, dstid));
+    newSEdge |= (nullptr != sCG->addCopySCGEdge(srcid, dstid, true));
     if (newSEdge)
         insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
     return newSEdge;

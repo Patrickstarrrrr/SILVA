@@ -283,7 +283,7 @@ public:
     virtual inline bool addCopyEdge(NodeID src, NodeID dst)
     {
         fCG->addCopyFCGEdge(src, dst);
-        if (sCG->addCopySCGEdge(src, dst))
+        if (sCG->addCopySCGEdge(src, dst, true))
         {
             updatePropaPts(src, dst);
             return true;
@@ -383,11 +383,19 @@ private:
     void processLoadRemoval(NodeID srcid, NodeID dstid);
     void processStoreRemoval(NodeID srcid, NodeID dstid);
     void processAddrRemoval(NodeID srcid, NodeID dstid);
+    
     void processCopyRemoval(NodeID srcid, NodeID dstid);
-    bool processCopyEdgeRemoval(NodeID srcid, NodeID dstid, bool byComplex = false);
+    void processCopyEdgeRemoval(NodeID srcid, NodeID dstid);
     void processCopyConstraintRemoval(NodeID srcid, NodeID dstid);
+
     void processVariantGepRemoval(NodeID srcid, NodeID dstid);
+    void processVariantGepEdgeRemoval(NodeID srcid, NodeID dstid);
+    void processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid);
+
     void processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepEdgeRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+
     void processSCCRedetection();
     void propagateDelPts(const PointsTo& pts, NodeID nodeId);
 

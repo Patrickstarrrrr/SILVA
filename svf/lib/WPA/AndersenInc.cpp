@@ -2723,10 +2723,12 @@ void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameS
     }
     
     // pts(nodeId) = pts(nodeId) U dPts
+    SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    nodeId = node->getId();
     unionPts(nodeId, dPts); 
 
     // process outgoing neighbor propagate
-    SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    
     for (auto it = node->directOutEdgeBegin(), eit = node->directOutEdgeEnd();
         it != eit; ++it)
     {

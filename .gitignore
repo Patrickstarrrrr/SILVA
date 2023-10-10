@@ -20,6 +20,6 @@ doxygen/
 *.status
 *.obj
 *.svf
-build.sh
+*.sh
 cmake-build-debug/
 compile_commands.json

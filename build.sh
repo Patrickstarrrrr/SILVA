@@ -221,12 +221,10 @@ BUILD_DIR="./${BUILD_TYPE}-build"
 
 rm -rf "${BUILD_DIR}"
 mkdir "${BUILD_DIR}"
-echo "haha"
 cmake -D CMAKE_BUILD_TYPE:STRING="${BUILD_TYPE}" \
     -DSVF_ENABLE_ASSERTIONS:BOOL=true            \
     -DSVF_SANITIZE="${SVF_SANITIZER}"            \
     -S "${SVFHOME}" -B "${BUILD_DIR}"
-echo "hahaha"
 cmake --build "${BUILD_DIR}" -j ${jobs}
 
 ########

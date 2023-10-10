@@ -1740,6 +1740,7 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
     }
     
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    nodeId = node->getId();
     PointsTo dPts; // objs need to be removed from pts(nodeId)
     dPts |= pts;
 

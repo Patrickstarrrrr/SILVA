@@ -6,7 +6,7 @@
 # Dependencies include: build-essential libncurses5 libncurses-dev cmake zlib1g-dev
 set -e # exit on first error
 
-jobs=40
+jobs=10
 
 #########
 # VARs and Links

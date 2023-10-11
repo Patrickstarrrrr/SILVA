@@ -1369,6 +1369,7 @@ void AndersenInc::processSCCRedetection()
         double rebuildEnd = stat->getClk();
         timeOfSCGRebuild += (rebuildEnd - rebuildStart) / TIMEINTERVAL;
 
+        setGraph(sCG);
         SCCDetect();
 
         while(!redetectReps.empty()) {

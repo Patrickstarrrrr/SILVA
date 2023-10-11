@@ -81,10 +81,14 @@ protected:
     //@}
 
 public:
+    static unsigned numOfSCCRestore;
     static double timeOfSCCFind;
     static double timeOfSCCEdgeRestore;
     static double timeOfBuildTempG;
     static double timeOfResetRepSub;
+    static double timeOfCollectEdge;
+    static double timeOfRemoveEdge;
+    static double timeOfAddEdge;
     // static double timeOfDeletionPTA;
     // static double timeOfInsertionPTA;
     /// Constructor
@@ -246,7 +250,7 @@ public:
     ConstraintGraph* buildTempG(NodeID rep, NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     ConstraintGraph* buildTempG(NodeID rep);
     void sccRestore(NodeID rep);
-    void restoreEdge(SConstraintNode* repNode);
+    void restoreEdge(SConstraintNode* repNode, PTAStat* stat = nullptr);
     void restoreAddr(SConstraintNode* repNode);
     void restoreLoad(SConstraintNode* repNode);
     void restoreStore(SConstraintNode* repNode);

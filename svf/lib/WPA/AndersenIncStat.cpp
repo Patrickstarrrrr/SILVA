@@ -318,6 +318,10 @@ void AndersenIncStat::performStat()
     timeStatMap["SCCFindTime"] = SConstraintGraph::timeOfSCCFind;
     timeStatMap["ResetRepSubTime"] = SConstraintGraph::timeOfResetRepSub;
     timeStatMap["SCCEdgeRestoreTime"] = SConstraintGraph::timeOfSCCEdgeRestore;
+    timeStatMap["SCCEdgeRestoreNum"] = SConstraintGraph::numOfSCCRestore;
+    timeStatMap["EdgeCollectionTime"] = SConstraintGraph::timeOfCollectEdge;
+    timeStatMap["EdgeRemovalTime"] = SConstraintGraph::timeOfRemoveEdge;
+    timeStatMap["EdgeAdditionTime"] = SConstraintGraph::timeOfAddEdge;
     timeStatMap["SCCInsertionTime"] = AndersenInc::timeOfInsertionSCC;
     timeStatMap["PropDeletionTime"] = AndersenInc::timeOfDeletionProp;
     timeStatMap["PropInsertionTime"] = AndersenInc::timeOfInsertionProp;

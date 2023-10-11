@@ -7,11 +7,14 @@ using namespace SVF;
 using namespace SVFUtil;
 
 
-
+unsigned SConstraintGraph::numOfSCCRestore = 0;
 double SConstraintGraph::timeOfSCCFind = 0;
 double SConstraintGraph::timeOfSCCEdgeRestore = 0;
 double SConstraintGraph::timeOfBuildTempG = 0;
 double SConstraintGraph::timeOfResetRepSub = 0;
+double SConstraintGraph::timeOfCollectEdge = 0;
+double SConstraintGraph::timeOfRemoveEdge = 0;
+double SConstraintGraph::timeOfAddEdge = 0;
 /*!
  * Start building super constraint graph
  */
@@ -893,10 +896,10 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* 
         //     restoreEdge(repNode);
         // }
         double restoreEdgeStart = stat->getClk();
-        restoreEdge(originRepNode);
+        restoreEdge(originRepNode, stat);
         double restoreEdgeEnd = stat->getClk();
-        timeOfResetRepSub = (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
-        
+        timeOfSCCEdgeRestore = (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
+        numOfSCCRestore ++;
         if (!allReps.test(rep))
             removeSConstraintNode(originRepNode);
 
@@ -1152,10 +1155,11 @@ void SConstraintGraph::sccRestore(NodeID rep)
     restoreEdge(repNode);
 }
 
-void SConstraintGraph::restoreEdge(SConstraintNode* repNode)
+void SConstraintGraph::restoreEdge(SConstraintNode* repNode, PTAStat* stat)
 {
     // 3. restore sconstriant edge
     /// 3.1 collect all sEdges and fEdges;
+    double collectStart = stat->getClk();
     SConstraintEdge::SConstraintEdgeSetTy sEdges;
     FConstraintEdge::FConstraintEdgeSetTy fEdges;
     for (auto it = repNode->InEdgeBegin(), eit = repNode->InEdgeEnd();
@@ -1172,7 +1176,11 @@ void SConstraintGraph::restoreEdge(SConstraintNode* repNode)
         for (FConstraintEdge* fEdge: sEdge->getFEdgeSet())
             fEdges.insert(fEdge);
     }
+    double collectEnd = stat->getClk();
+    timeOfCollectEdge += (collectEnd - collectStart) / TIMEINTERVAL;
+
     /// 3.2 remove sEdges
+    double removeStart = stat->getClk();
     for (SConstraintEdge* sEdge: sEdges) {
         if (SVFUtil::isa<AddrSCGEdge>(sEdge)) {
             AddrSCGEdge* sAddr = SVFUtil::dyn_cast<AddrSCGEdge>(sEdge);
@@ -1199,7 +1207,10 @@ void SConstraintGraph::restoreEdge(SConstraintNode* repNode)
             removeDirectEdge(sEdge);
         }
     }
+    double removeEnd = stat->getClk();
+    timeOfRemoveEdge += (removeEnd - removeStart) / TIMEINTERVAL;
     /// 3.3 add fEdges
+    double addStart = stat->getClk();
     for (FConstraintEdge* fEdge: fEdges) {
         NodeID fsrc = fEdge->getSrcID();
         NodeID fdst = fEdge->getDstID();
@@ -1218,6 +1229,8 @@ void SConstraintGraph::restoreEdge(SConstraintNode* repNode)
             addNormalGepSCGEdge(fsrc, fdst, fngep->getAccessPath());
         }
     }
+    double addEnd = stat->getClk();
+    timeOfAddEdge += (addEnd - addStart) / TIMEINTERVAL;
 }
 
 /*!

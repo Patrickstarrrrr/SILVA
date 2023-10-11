@@ -314,6 +314,10 @@ void AndersenIncStat::performStat()
     timeStatMap["DeletionPTATime"] = AndersenInc::timeOfDeletionPTA;
     timeStatMap["InsertionPTATime"] = AndersenInc::timeOfInsertionPTA;
     timeStatMap["SCCDeletionTime"] = AndersenInc::timeOfDeletionSCC;
+    timeStatMap["TempGBuildTime"] = SConstraintGraph::timeOfBuildTempG;
+    timeStatMap["SCCFindTime"] = SConstraintGraph::timeOfSCCFind;
+    timeStatMap["ResetRepSubTime"] = SConstraintGraph::timeOfResetRepSub;
+    timeStatMap["SCCEdgeRestoreTime"] = SConstraintGraph::timeOfSCCEdgeRestore;
     timeStatMap["SCCInsertionTime"] = AndersenInc::timeOfInsertionSCC;
     timeStatMap["PropDeletionTime"] = AndersenInc::timeOfDeletionProp;
     timeStatMap["PropInsertionTime"] = AndersenInc::timeOfInsertionProp;

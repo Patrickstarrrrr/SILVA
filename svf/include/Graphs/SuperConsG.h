@@ -10,6 +10,7 @@
 
 namespace SVF
 {
+class PTAStat;
 
 class SConstraintGraph : public GenericGraph<SConstraintNode, SConstraintEdge>
 {
@@ -80,6 +81,12 @@ protected:
     //@}
 
 public:
+    static double timeOfSCCFind;
+    static double timeOfSCCEdgeRestore;
+    static double timeOfBuildTempG;
+    static double timeOfResetRepSub;
+    // static double timeOfDeletionPTA;
+    // static double timeOfInsertionPTA;
     /// Constructor
     SConstraintGraph(SVFIR* p, FConstraintGraph* fCG): pag(p), edgeIndex(0), fConsG(fCG)
     {
@@ -235,7 +242,7 @@ public:
     void removeStoreEdge(StoreSCGEdge* edge);
     /// SCC break detection
     unsigned sccBreakDetect(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind, NodeBS& allReps, NodeID& oldRep);
-    unsigned sccBreakDetect(NodeID rep, NodeBS& allReps);
+    unsigned sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* stat);
     ConstraintGraph* buildTempG(NodeID rep, NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     ConstraintGraph* buildTempG(NodeID rep);
     void sccRestore(NodeID rep);

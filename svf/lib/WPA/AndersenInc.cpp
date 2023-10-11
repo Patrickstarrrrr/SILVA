@@ -1357,7 +1357,7 @@ void AndersenInc::processSCCRedetection()
         NodeBS newReps;
         const PointsTo& oldRepPts = getPts(oldRep);
         double sccStart = stat->getClk();
-        unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps);
+        unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
         double sccEnd = stat->getClk();
         timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
         if (1 == sccKeep) {

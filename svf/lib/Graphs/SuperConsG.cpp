@@ -1,4 +1,3 @@
-
 #include "Graphs/FlatConsG.h"
 #include "Graphs/SuperConsG.h"
 #include "Util/Options.h"
@@ -7,6 +6,12 @@
 using namespace SVF;
 using namespace SVFUtil;
 
+
+
+double SConstraintGraph::timeOfSCCFind = 0;
+double SConstraintGraph::timeOfSCCEdgeRestore = 0;
+double SConstraintGraph::timeOfBuildTempG = 0;
+double SConstraintGraph::timeOfResetRepSub = 0;
 /*!
  * Start building super constraint graph
  */
@@ -810,20 +815,30 @@ void SConstraintGraph::removeDirectEdge(SConstraintEdge* edge)
 /*
  * SCC break detection after a direct edge removal
  */
-unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps)
+unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* stat)
 {
     enum {SCC_RESTORE, SCC_KEEP};
 
     SConstraintNode* originRepNode = getSConstraintNode(rep);
     rep = originRepNode->getId();
 
+    double buildTempGStart = stat->getClk();
     ConstraintGraph* tempG = buildTempG(rep);
+    double buildTempGEnd = stat->getClk();
+    timeOfBuildTempG += (buildTempGEnd - buildTempGStart) / TIMEINTERVAL;
+
     SCCDetection<ConstraintGraph*> d(tempG);
+
+    double findStart = stat->getClk();
     d.find();
+    double findEnd = stat->getClk();
+    timeOfSCCFind += (findEnd - findStart) / TIMEINTERVAL;
+
     delete tempG;
     NodeStack& topoOrder = d.topoNodeStack();
     if (topoOrder.size() > 1) {
         // 1. reset rep/sub relation
+        double resetStart = stat->getClk();
         NodeBS allSubs = sccSubNodes(rep);
         resetSubs(rep);
         for (NodeID sub: allSubs)
@@ -854,6 +869,8 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps)
             setSubs(repNodeId, subNodesNotConst);
             // @}
         }
+        double resetEnd = stat->getClk();
+        timeOfResetRepSub += (resetEnd - resetStart) / TIMEINTERVAL;
 
         // 2. restore sconstraint node
         for (NodeBS::iterator nodeIt = allReps.begin(); nodeIt != allReps.end(); nodeIt ++)
@@ -875,7 +892,11 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps)
         //     SConstraintNode* repNode = getSConstraintNode(eachRep);
         //     restoreEdge(repNode);
         // }
+        double restoreEdgeStart = stat->getClk();
         restoreEdge(originRepNode);
+        double restoreEdgeEnd = stat->getClk();
+        timeOfResetRepSub = (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
+        
         if (!allReps.test(rep))
             removeSConstraintNode(originRepNode);
 

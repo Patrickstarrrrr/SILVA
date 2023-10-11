@@ -140,6 +140,10 @@ public:
     static double timeOfDelComputeFP;
     static double timeOfInsComputeFP;
 
+    static double timeOfSCGRebuild;
+    static double timeOfSCGDelete;
+    static unsigned numOfRedetectSCC;
+
     //@}
     typedef SCCDetection<SConstraintGraph*> CGSCC;
     typedef OrderedMap<CallSite, NodeID> CallSite2DummyValPN;

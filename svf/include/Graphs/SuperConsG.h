@@ -92,10 +92,14 @@ public:
     // static double timeOfDeletionPTA;
     // static double timeOfInsertionPTA;
     /// Constructor
-    SConstraintGraph(SVFIR* p, FConstraintGraph* fCG): pag(p), edgeIndex(0), fConsG(fCG)
+    SConstraintGraph(SVFIR* p, FConstraintGraph* fCG, bool copyf = false): pag(p), edgeIndex(0), fConsG(fCG)
     {
-        buildSCG();
+        if (!copyf)
+            buildSCG();
+        else
+            copyFCG(fCG);
     }
+    void copyFCG(FConstraintGraph* fCG);
     /// Destructor
     virtual ~SConstraintGraph()
     {

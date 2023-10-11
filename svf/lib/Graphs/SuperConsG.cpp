@@ -15,6 +15,44 @@ double SConstraintGraph::timeOfResetRepSub = 0;
 double SConstraintGraph::timeOfCollectEdge = 0;
 double SConstraintGraph::timeOfRemoveEdge = 0;
 double SConstraintGraph::timeOfAddEdge = 0;
+
+void SConstraintGraph::copyFCG(FConstraintGraph* fCG)
+{
+    for (FConstraintGraph::iterator it = fCG->begin(), eit = fCG->end(); it!=eit; ++it)
+    {
+        addSConstraintNode(new SConstraintNode(it->first), it->first);
+    }
+
+    for (auto directEdge: fCG->getDirectFCGEdges())
+    {
+        if (SVFUtil::isa<CopyFCGEdge>(directEdge)) {
+            addCopySCGEdge(directEdge->getSrcID(), directEdge->getDstID());
+        }
+        else if (SVFUtil::isa<VariantGepFCGEdge>(directEdge)) {
+            addVariantGepSCGEdge(directEdge->getSrcID(), directEdge->getDstID());
+        }
+        else if (SVFUtil::isa<NormalGepFCGEdge>(directEdge)) {
+            NormalGepFCGEdge* ngep = SVFUtil::dyn_cast<NormalGepFCGEdge>(directEdge);
+            addNormalGepSCGEdge(ngep->getSrcID(), ngep->getDstID(), ngep->getAccessPath());
+        }
+    }
+
+    for (auto addr: fCG->getAddrFCGEdges())
+    {
+        addAddrSCGEdge(addr->getSrcID(), addr->getDstID());
+    }
+
+    for (auto load: fCG->getLoadFCGEdges())
+    {
+        addLoadSCGEdge(load->getSrcID(), load->getDstID());
+    }
+
+    for (auto store: fCG->getStoreFCGEdges())
+    {
+        addStoreSCGEdge(store->getSrcID(), store->getDstID());
+    }
+}
+
 /*!
  * Start building super constraint graph
  */

@@ -1355,25 +1355,56 @@ void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
 
 void AndersenInc::processSCCRedetection()
 {
-    double sccStart = stat->getClk();
-    if (!redetectReps.empty()) {
-        numOfRedetectSCC ++;
+//     double sccStart = stat->getClk();
+//     if (!redetectReps.empty()) {
+//         numOfRedetectSCC ++;
         
-        double deleteStart = stat->getClk();
-        delete sCG;
-        double deleteEnd = stat->getClk();
-        timeOfSCGDelete += (deleteEnd - deleteStart) / TIMEINTERVAL;
+//         double deleteStart = stat->getClk();
+//         delete sCG;
+//         double deleteEnd = stat->getClk();
+//         timeOfSCGDelete += (deleteEnd - deleteStart) / TIMEINTERVAL;
 
-        double rebuildStart = stat->getClk();
-        sCG = new SConstraintGraph(pag, fCG, true);
-        double rebuildEnd = stat->getClk();
-        timeOfSCGRebuild += (rebuildEnd - rebuildStart) / TIMEINTERVAL;
+//         double rebuildStart = stat->getClk();
+//         sCG = new SConstraintGraph(pag, fCG, true);
+//         double rebuildEnd = stat->getClk();
+//         timeOfSCGRebuild += (rebuildEnd - rebuildStart) / TIMEINTERVAL;
 
-        setGraph(sCG);
-        SCCDetect();
+//         setGraph(sCG);
+//         SCCDetect();
 
-        while(!redetectReps.empty()) {
-            NodeID oldRep = redetectReps.pop();
+//         while(!redetectReps.empty()) {
+//             NodeID oldRep = redetectReps.pop();
+//             for (SDK* sdk: rep2EdgeSet[oldRep]) {
+//                 if (sCG->getSConstraintNode(sdk->src) == sCG->getSConstraintNode(sdk->dst)) {
+//                     delete sdk;
+//                     continue;
+//                 }
+//                 delEdgeVec.push_back(sdk);
+//             }
+//             rep2EdgeSet[oldRep].clear();
+//         }
+//     }
+//     double sccEnd = stat->getClk();
+//     timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+    while (!redetectReps.empty())
+    {
+        NodeID oldRep = redetectReps.pop();
+        NodeBS newReps;
+        const PointsTo& oldRepPts = getPts(oldRep);
+        double sccStart = stat->getClk();
+        unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
+        double sccEnd = stat->getClk();
+        timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+        if (1 == sccKeep) {
+            for (SDK* sdk: rep2EdgeSet[oldRep])
+                delete sdk;
+            rep2EdgeSet[oldRep].clear();
+            continue;
+        }
+        else {
+            // SCC Restore
+            for (NodeID id: newReps)
+                unionPts(id, oldRepPts);
             for (SDK* sdk: rep2EdgeSet[oldRep]) {
                 if (sCG->getSConstraintNode(sdk->src) == sCG->getSConstraintNode(sdk->dst)) {
                     delete sdk;
@@ -1384,44 +1415,15 @@ void AndersenInc::processSCCRedetection()
             rep2EdgeSet[oldRep].clear();
         }
     }
-    double sccEnd = stat->getClk();
-    timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
-    // while (!redetectReps.empty())
-    // {
-    //     NodeID oldRep = redetectReps.pop();
-    //     NodeBS newReps;
-    //     const PointsTo& oldRepPts = getPts(oldRep);
-    //     double sccStart = stat->getClk();
-    //     unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
-    //     double sccEnd = stat->getClk();
-    //     timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
-    //     if (1 == sccKeep) {
-    //         for (SDK* sdk: rep2EdgeSet[oldRep])
-    //             delete sdk;
-    //         rep2EdgeSet[oldRep].clear();
-    //         continue;
-    //     }
-    //     else {
-    //         // SCC Restore
-    //         for (NodeID id: newReps)
-    //             unionPts(id, oldRepPts);
-    //         for (SDK* sdk: rep2EdgeSet[oldRep]) {
-    //             if (sCG->getSConstraintNode(sdk->src) == sCG->getSConstraintNode(sdk->dst)) {
-    //                 delete sdk;
-    //                 continue;
-    //             }
-    //             delEdgeVec.push_back(sdk);
-    //         }
-    //         rep2EdgeSet[oldRep].clear();
-    //     }
-    // }
 }
 
 void AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid)
 {
     FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
     FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
-    FConstraintEdge* fCopy = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+    FConstraintEdge* fCopy = fCG->getFEdgeOrNullptr(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+    if (fCopy == nullptr)
+        return;
     CopyFCGEdge* copyFCGEdge = SVFUtil::dyn_cast<CopyFCGEdge>(fCopy);
     if (! copyFCGEdge->getComplexEdgeSet().empty()) {
         // Copy not by complex constraint

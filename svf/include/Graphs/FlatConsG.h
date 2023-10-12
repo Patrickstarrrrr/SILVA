@@ -111,6 +111,49 @@ public:
     }
 
     /// Get an edge via its src and dst nodes and kind
+    inline FConstraintEdge* getFEdgeOrNullptr(FConstraintNode* src, FConstraintNode* dst, FConstraintEdge::FConstraintEdgeK kind)
+    {
+        FConstraintEdge edge(src,dst,kind);
+        if(kind == FConstraintEdge::FCopy || kind == FConstraintEdge::FNormalGep || kind == FConstraintEdge::FVariantGep)
+        {
+            auto eit = directFEdgeSet.find(&edge);
+            if (eit == directFEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == FConstraintEdge::FAddr)
+        {
+            auto eit = AddrFCGEdgeSet.find(&edge);
+            if (eit == AddrFCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == FConstraintEdge::FStore)
+        {
+            auto eit = StoreFCGEdgeSet.find(&edge);
+            if (eit == StoreFCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == FConstraintEdge::FLoad)
+        {
+            auto eit = LoadFCGEdgeSet.find(&edge);
+            if (eit == LoadFCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else
+        {
+            assert(false && "no other kind!");
+            return nullptr;
+        }
+        // FConstraintEdge edge(src,dst,kind);
+        // auto eit = directFEdgeSet.find(&edge);
+        // if (eit == directFEdgeSet.end())
+        //     return nullptr;
+        // return *eit
+    }
+    
     inline FConstraintEdge* getEdge(FConstraintNode* src, FConstraintNode* dst, FConstraintEdge::FConstraintEdgeK kind)
     {
         FConstraintEdge edge(src,dst,kind);

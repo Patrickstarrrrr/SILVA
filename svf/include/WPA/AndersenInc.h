@@ -371,6 +371,7 @@ private:
     RepEdgeSetMap rep2EdgeSet;
     PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
     PtsDiffMap allPtsDiffMap; // all ptr pts diff
+    u32_t incRound;
 
 
 public:
@@ -379,6 +380,7 @@ public:
 
 private:
     void singleIncremental(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind, int count);
+    void stepIncremental();
     /// handling deletion
     //@{
     void processDeletion();

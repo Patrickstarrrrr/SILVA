@@ -1005,4 +1005,9 @@ const Option<u32_t> Options::NGepSpecificRound(
     0
 );
 
+const Option<u32_t> Options::IncStep(
+    "inc-step",
+    "The number of statements processed per incremental anaylsis round.",
+    1
+);
 } // namespace SVF.

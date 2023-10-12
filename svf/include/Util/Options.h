@@ -293,6 +293,7 @@ public:
     static const Option<u32_t> StoreSpecificRound;
     static const Option<u32_t> LoadStartingRound;
     static const Option<u32_t> LoadSpecificRound;
+    static const Option<u32_t> IncStep;
 };
 }  // namespace SVF
 

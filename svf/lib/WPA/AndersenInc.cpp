@@ -215,8 +215,8 @@ void AndersenInc::analyze()
             // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
             if (stepCount == step) {
                 stepCount = 0;
                 incRound++;
@@ -240,8 +240,8 @@ void AndersenInc::analyze()
                 stepCount++;
                 NodeID src = opVar->getId();
                 NodeID dst = edge->getResID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
                 if (stepCount == step) {
                     stepCount = 0;
                     incRound++;
@@ -266,8 +266,8 @@ void AndersenInc::analyze()
                 stepCount++;
                 NodeID src = opVar->getId();
                 NodeID dst = edge->getResID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
                 if (stepCount == step) {
                     stepCount = 0;
                     incRound++;
@@ -291,8 +291,8 @@ void AndersenInc::analyze()
             // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
             if (stepCount == step) {
                 stepCount = 0;
                 incRound++;
@@ -315,8 +315,8 @@ void AndersenInc::analyze()
             // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
             if (stepCount == step) {
                 stepCount = 0;
                 incRound++;
@@ -339,8 +339,8 @@ void AndersenInc::analyze()
             // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
             if (stepCount == step) {
                 stepCount = 0;
                 incRound++;
@@ -363,8 +363,8 @@ void AndersenInc::analyze()
             // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
             NodeID src = edge->getRHSVarID();
             NodeID dst = edge->getLHSVarID();
-            delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-            insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+            insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
             if (stepCount == step) {
                 stepCount = 0;
                 incRound++;
@@ -387,9 +387,9 @@ void AndersenInc::analyze()
                     ngeps.end(); iter != eiter; ++iter)
         {
             gepcount++;
-            stepCount++;
             GepStmt* edge = SVFUtil::cast<GepStmt>(*iter);
             if(edge->isVariantFieldGep()) {
+                stepCount++;
                 vgepcount++;
                 if (vgepcount < vsr)
                     continue; 
@@ -398,8 +398,8 @@ void AndersenInc::analyze()
                 // addVariantGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
                 NodeID src = edge->getRHSVarID();
                 NodeID dst = edge->getLHSVarID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
+                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
+                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
                 if (stepCount == step) {
                     stepCount = 0;
                     incRound++;
@@ -1422,8 +1422,9 @@ void AndersenInc::processStoreRemoval(NodeID srcid, NodeID dstid)
 
     FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
     FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
-    FConstraintEdge* fStore = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FStore);
-
+    FConstraintEdge* fStore = fCG->getFEdgeOrNullptr(fSrcNode, fDstNode, FConstraintEdge::FStore);
+    if (fStore == nullptr)
+        return;
     const PointsTo& dstPts = getPts(dstid);
 
     for (NodeID o: dstPts) {
@@ -1526,6 +1527,7 @@ void AndersenInc::processSCCRedetection()
         }
         else {
             // SCC Restore
+            SCCBreak = true;
             for (NodeID id: newReps)
                 unionPts(id, oldRepPts);
             for (SDK* sdk: rep2EdgeSet[oldRep]) {
@@ -2042,6 +2044,7 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
 void AndersenInc::processDeletion_EdgeConstraint()
 {
     initFpPDM();
+    SCCBreak = false;
     bool newCallCopyEdge = false;
     // bool needSCCDetect = false;
     do {
@@ -2662,7 +2665,7 @@ void AndersenInc::processInsertion()
         }
         SVFUtil::outs() << "Inserted DirectEdge Num: " << insDirectEdgeCount << "\n";
         
-        if (needSCCDetect) {
+        if (needSCCDetect && SCCBreak) {
             double sccStart = stat->getClk();
             SCCDetect();
             double sccEnd = stat->getClk();

@@ -149,10 +149,13 @@ public:
     /// Edge kind
     typedef s64_t GNodeK;
     typedef OrderedSet<EdgeType*, typename EdgeType::equalGEdge> GEdgeSetTy;
+    typedef Set<EdgeType*> GEdgeUOSetTy;
     /// Edge iterator
     ///@{
     typedef typename GEdgeSetTy::iterator iterator;
     typedef typename GEdgeSetTy::const_iterator const_iterator;
+    // typedef typename GEdgeUOSetTy::iterator uo_oterator;
+    // typedef typename GEdgeUOSetTy::iterator const_uo_oterator;
     ///@}
 
 private:

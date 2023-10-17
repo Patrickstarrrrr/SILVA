@@ -51,6 +51,7 @@ public:
     }
 
     typedef GenericNode<FConstraintNode,FConstraintEdge>::GEdgeSetTy FConstraintEdgeSetTy;
+    typedef GenericNode<FConstraintNode,FConstraintEdge>::GEdgeUOSetTy FConstraintEdgeUOSetTy;
 };
 
 /*!
@@ -92,7 +93,7 @@ private:
     CopyFCGEdge();                      ///< place holder
     CopyFCGEdge(const CopyFCGEdge &);  ///< place holder
     void operator=(const CopyFCGEdge &); ///< place holder
-    FConstraintEdgeSetTy complexEdgeSet;
+    FConstraintEdgeUOSetTy complexEdgeSet;
 public:
     /// Methods for support type inquiry through isa, cast, and dyn_cast:
     //@{
@@ -114,7 +115,7 @@ public:
     CopyFCGEdge(FConstraintNode* s, FConstraintNode* d, EdgeID id) : FConstraintEdge(s,d,FCopy,id)
     {
     }
-    inline FConstraintEdge::FConstraintEdgeSetTy& getComplexEdgeSet()
+    inline FConstraintEdge::FConstraintEdgeUOSetTy& getComplexEdgeSet()
     {
         return complexEdgeSet;
     }

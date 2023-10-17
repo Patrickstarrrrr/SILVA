@@ -323,7 +323,7 @@ public:
     
     /// SCC detection
     virtual NodeStack& SCCDetect();
-
+    // void NodeStack& SCCDetectIns();
     
     /// Get PTA name
     virtual const std::string PTAName() const
@@ -358,6 +358,7 @@ public:
     typedef std::unordered_map<NodeID, std::set<SDK*>> RepEdgeSetMap;
 
 private:
+    bool SCCBreak;
     // std::vector<SrcDstKind *> delEdgesVec;  // deleted constraintEdges:(src, dst, edgeKind)
     // std::vector<SrcDstKind *> insEdgesVec;  // inserted constraintEdges
     FIFOWorkList<FConstraintEdge *> delEdgesWL;

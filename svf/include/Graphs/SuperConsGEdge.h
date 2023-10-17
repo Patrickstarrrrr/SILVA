@@ -26,7 +26,7 @@ public:
 
 private:
     EdgeID edgeId;
-    FConstraintEdge::FConstraintEdgeSetTy fEdgeSet;
+    FConstraintEdge::FConstraintEdgeUOSetTy fEdgeSet;
     // bool _isRetarget;
 public:
     /// Constructor
@@ -64,10 +64,11 @@ public:
     }
     /// Constraint edge type
     typedef GenericNode<SConstraintNode,SConstraintEdge>::GEdgeSetTy SConstraintEdgeSetTy;
+    typedef GenericNode<SConstraintNode,SConstraintEdge>::GEdgeUOSetTy SConstraintEdgeUOSetTy;
 
     /// flat Edge Set
     //@{
-    inline const FConstraintEdge::FConstraintEdgeSetTy& getFEdgeSet() const 
+    inline const FConstraintEdge::FConstraintEdgeUOSetTy& getFEdgeSet() const 
     {
         return fEdgeSet;
     }

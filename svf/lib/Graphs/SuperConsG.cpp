@@ -934,7 +934,7 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* 
         //     restoreEdge(repNode);
         // }
         double restoreEdgeStart = stat->getClk();
-        restoreEdge(originRepNode, stat);
+        restoreEdge(originRepNode, allReps, stat);
         double restoreEdgeEnd = stat->getClk();
         timeOfSCCEdgeRestore = (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
         numOfSCCRestore ++;
@@ -1193,13 +1193,142 @@ void SConstraintGraph::sccRestore(NodeID rep)
     restoreEdge(repNode);
 }
 
+void SConstraintGraph::restoreEdge(SConstraintNode* repNode, NodeBS& allReps, PTAStat* stat)
+{
+    NodeID oldRepID = repNode->getId();
+    bool hasOldRep = allReps.test(oldRepID);
+    if (hasOldRep)
+        allReps.reset(oldRepID);
+    // 3. restore sconstriant edge
+    /// 3.1 collect all sEdges and fEdges;
+    double collectStart = stat->getClk();
+    SConstraintEdge::SConstraintEdgeUOSetTy sEdges;
+    FConstraintEdge::FConstraintEdgeUOSetTy fEdges;
+    for (auto it = repNode->InEdgeBegin(), eit = repNode->InEdgeEnd();
+        it != eit; ++it) {
+        SConstraintEdge* inSEdge = *it;
+        NodeID srcID = inSEdge->getSrcID();
+        NodeID dstID = oldRepID;
+        FConstraintEdge::FConstraintEdgeUOSetTy fEdges4S;
+
+        for (FConstraintEdge* fEdge: inSEdge->getFEdgeSet()) {
+            if (srcID == dstID) { // self cycle
+                NodeID fSrcRepID = sccRepNode(fEdge->getSrcID());
+                NodeID fDstRepID = sccRepNode(fEdge->getDstID());
+                if (allReps.test(fSrcRepID) || allReps.test(fDstRepID)) {
+                    fEdges4S.insert(fEdge);
+                    fEdges.insert(fEdge);
+                }
+            }
+            else { // other incoming edges
+                NodeID fDstRepID = sccRepNode(fEdge->getDstID());
+                if (allReps.test(fDstRepID)) {
+                    fEdges4S.insert(fEdge);
+                    fEdges.insert(fEdge);
+                }
+            }
+        }  
+        for (FConstraintEdge* fEdge: fEdges4S)
+        {
+            inSEdge->removeFEdge(fEdge);
+        }
+        fEdges4S.clear();
+        if (inSEdge->getFEdgeSet().empty())
+            sEdges.insert(inSEdge);
+    }
+
+    for (auto it = repNode->OutEdgeBegin(), eit = repNode->OutEdgeEnd();
+        it != eit; ++it) {
+        SConstraintEdge* outSEdge = *it;
+        NodeID srcID = oldRepID;
+        NodeID dstID = outSEdge->getDstID();
+        FConstraintEdge::FConstraintEdgeUOSetTy fEdges4S;
+        for (FConstraintEdge* fEdge: outSEdge->getFEdgeSet()) {
+            if (srcID == dstID) // self cycle
+                continue;
+            else {
+                NodeID fSrcRepID = sccRepNode(fEdge->getSrcID());
+                if (allReps.test(fSrcRepID)) {
+                    fEdges4S.insert(fEdge);
+                    fEdges.insert(fEdge);
+                }
+            }
+        }
+        for (FConstraintEdge* fEdge: fEdges4S)
+        {
+            outSEdge->removeFEdge(fEdge);
+        }
+        fEdges4S.clear();
+        if (outSEdge->getFEdgeSet().empty())
+            sEdges.insert(outSEdge);
+    }
+    double collectEnd = stat->getClk();
+    timeOfCollectEdge += (collectEnd - collectStart) / TIMEINTERVAL;
+
+    /// 3.2 remove sEdges
+    double removeStart = stat->getClk();
+    for (SConstraintEdge* sEdge: sEdges) {
+        if (SVFUtil::isa<AddrSCGEdge>(sEdge)) {
+            AddrSCGEdge* sAddr = SVFUtil::dyn_cast<AddrSCGEdge>(sEdge);
+            removeAddrEdge(sAddr);
+        }
+        else if (SVFUtil::isa<CopySCGEdge>(sEdge)) {
+            // CopySCGEdge* sCopy = SVFUtil::dyn_cast<CopySCGEdge>(sEdge);
+            removeDirectEdge(sEdge);
+        }
+        else if (SVFUtil::isa<LoadSCGEdge>(sEdge)) {
+            LoadSCGEdge* sLoad = SVFUtil::dyn_cast<LoadSCGEdge>(sEdge);
+            removeLoadEdge(sLoad);
+        }
+        else if (SVFUtil::isa<StoreSCGEdge>(sEdge)) {
+            StoreSCGEdge* sStore = SVFUtil::dyn_cast<StoreSCGEdge>(sEdge);
+            removeStoreEdge(sStore);
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(sEdge)) {
+            // NormalGepSCGEdge* sngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(sEdge);
+            removeDirectEdge(sEdge);
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(sEdge)) {
+            // NormalGepSCGEdge* sngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(sEdge);
+            removeDirectEdge(sEdge);
+        }
+    }
+    double removeEnd = stat->getClk();
+    timeOfRemoveEdge += (removeEnd - removeStart) / TIMEINTERVAL;
+    /// 3.3 add fEdges
+    double addStart = stat->getClk();
+    for (FConstraintEdge* fEdge: fEdges) {
+        NodeID fsrc = fEdge->getSrcID();
+        NodeID fdst = fEdge->getDstID();
+        if (SVFUtil::isa<AddrFCGEdge>(fEdge))
+            addAddrSCGEdge(fsrc, fdst);
+        else if (SVFUtil::isa<CopyFCGEdge>(fEdge))
+            addCopySCGEdge(fsrc, fdst, true);
+        else if (SVFUtil::isa<LoadFCGEdge>(fEdge))
+            addLoadSCGEdge(fsrc, fdst);
+        else if (SVFUtil::isa<StoreFCGEdge>(fEdge))
+            addStoreSCGEdge(fsrc, fdst);
+        else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge))
+            addVariantGepSCGEdge(fsrc, fdst);
+        else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
+            NormalGepFCGEdge* fngep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
+            addNormalGepSCGEdge(fsrc, fdst, fngep->getAccessPath());
+        }
+    }
+    double addEnd = stat->getClk();
+    timeOfAddEdge += (addEnd - addStart) / TIMEINTERVAL;
+
+    if (hasOldRep)
+        allReps.set(oldRepID);
+}
+
 void SConstraintGraph::restoreEdge(SConstraintNode* repNode, PTAStat* stat)
 {
     // 3. restore sconstriant edge
     /// 3.1 collect all sEdges and fEdges;
     double collectStart = stat->getClk();
-    SConstraintEdge::SConstraintEdgeSetTy sEdges;
-    FConstraintEdge::FConstraintEdgeSetTy fEdges;
+    SConstraintEdge::SConstraintEdgeUOSetTy sEdges;
+    FConstraintEdge::FConstraintEdgeUOSetTy fEdges;
     for (auto it = repNode->InEdgeBegin(), eit = repNode->InEdgeEnd();
         it != eit; ++it) {
         SConstraintEdge* sEdge = *it;

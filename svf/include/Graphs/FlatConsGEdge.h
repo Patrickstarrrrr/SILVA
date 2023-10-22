@@ -26,7 +26,10 @@ public:
 
 private:
     EdgeID edgeId;
+    PointsTo compCache;
 public:
+    PointsTo& getCompCache() { return compCache; }
+
     FConstraintEdge(FConstraintNode* s, FConstraintNode* d, FConstraintEdgeK k, EdgeID id = 0) : GenericFConsEdgeTy(s,d,k),edgeId(id)
     {
     }
@@ -87,6 +90,8 @@ public:
 /*!
  * Copy edge
  */
+class StoreFCGEdge;
+class LoadFCGEdge;
 class CopyFCGEdge: public FConstraintEdge
 {
 private:
@@ -121,11 +126,31 @@ public:
     }
     inline bool addComplexEdge(FConstraintEdge* ce)
     {
-        return complexEdgeSet.insert(ce).second;
+        // return complexEdgeSet.insert(ce).second;
+        bool ret = complexEdgeSet.insert(ce).second;
+        if (ret) {
+            if (SVFUtil::isa<StoreFCGEdge>(ce)) {
+                // add copy dst into complex cache
+                ce->getCompCache().set(this->getDstID());
+            }
+            else if (SVFUtil::isa<LoadFCGEdge>(ce)) {
+                // add copy src into complex cache
+                ce->getCompCache().set(this->getSrcID());
+            }
+        }
+        return ret;
     }
     inline void removeComplexEdge(FConstraintEdge* ce)
     {
         complexEdgeSet.erase(ce);
+        if (SVFUtil::isa<StoreFCGEdge>(ce)) {
+            // remove copy dst from complex cache
+            ce->getCompCache().reset(this->getDstID());
+        }
+        else if (SVFUtil::isa<LoadFCGEdge>(ce)) {
+            // remove copy src from complex cache
+            ce->getCompCache().reset(this->getSrcID());
+        }
     }
 };
 

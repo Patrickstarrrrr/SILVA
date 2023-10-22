@@ -1,6 +1,15 @@
 #ifndef INCLUDE_WPA_ANDERSENINC_H_
 #define INCLUDE_WPA_ANDERSENINC_H_
 
+#define STAT_TIME(timeOfFunc, ...) \
+    do { \
+        double dStartTime = stat->getClk(); \
+        __VA_ARGS__; \
+        double dEndTime = stat->getClk(); \
+        timeOfFunc += (double)(dEndTime - dStartTime) / TIMEINTERVAL; \
+    } while (0)
+
+
 #include "WPA/Andersen.h"
 #include "Graphs/SuperConsG.h"
 #include "Graphs/FlatConsG.h"
@@ -364,6 +373,10 @@ private:
     FIFOWorkList<FConstraintEdge *> delEdgesWL;
     FIFOWorkList<FConstraintEdge *> insEdgesWL;
     FIFOWorkList<FConstraintEdge *> insPropWL;
+
+    std::unordered_map<NodeID, PointsTo> insPropMap;
+    std::unordered_set<NodeID> unFilterSet;
+    std::vector<SDK*> insDirectConsVec;
     std::vector<SDK*> insEdgeVec;
     std::vector<SDK*> insDirectEdgeVec;
     std::vector<SDK*> delEdgeVec;

@@ -255,6 +255,7 @@ public:
     ConstraintGraph* buildTempG(NodeID rep);
     void sccRestore(NodeID rep);
     void restoreEdge(SConstraintNode* repNode, PTAStat* stat = nullptr);
+    void restoreEdge(SConstraintNode* repNode, NodeBS& allReps, PTAStat* stat = nullptr);
     void restoreAddr(SConstraintNode* repNode);
     void restoreLoad(SConstraintNode* repNode);
     void restoreStore(SConstraintNode* repNode);

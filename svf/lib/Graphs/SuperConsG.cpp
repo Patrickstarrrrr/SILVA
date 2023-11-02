@@ -11,10 +11,46 @@ unsigned SConstraintGraph::numOfSCCRestore = 0;
 double SConstraintGraph::timeOfSCCFind = 0;
 double SConstraintGraph::timeOfSCCEdgeRestore = 0;
 double SConstraintGraph::timeOfBuildTempG = 0;
+unsigned SConstraintGraph::numOfSaveTempG = 0;
 double SConstraintGraph::timeOfResetRepSub = 0;
 double SConstraintGraph::timeOfCollectEdge = 0;
 double SConstraintGraph::timeOfRemoveEdge = 0;
 double SConstraintGraph::timeOfAddEdge = 0;
+
+void SConstraintGraph::removeTempGEdge(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind)
+{
+    NodeID rep = sccRepNode(src);
+    if (rep2tempG.find(rep) == rep2tempG.end())
+        return;
+    ConstraintGraph* g = rep2tempG[rep];
+    ConstraintNode* srcnode = g->getConstraintNode(src);
+    ConstraintNode* dstnode = g->getConstraintNode(dst);
+    ConstraintEdge* e = nullptr;
+    if (kind == FConstraintEdge::FCopy) {
+        e = g->getEdgeOrNullptr(srcnode, dstnode, ConstraintEdge::Copy);
+    }
+    else if (kind == FConstraintEdge::FVariantGep) {
+        e = g->getEdgeOrNullptr(srcnode, dstnode, ConstraintEdge::VariantGep);
+    }
+    else if (kind == FConstraintEdge::FNormalGep) {
+        e = g->getEdgeOrNullptr(srcnode, dstnode, ConstraintEdge::NormalGep);
+    }
+    if (e == nullptr)
+        return;
+    g->removeDirectEdge(e);
+}
+
+void SConstraintGraph::cleanRep2TempG()
+{
+    for(auto it = rep2tempG.begin(), eit = rep2tempG.end();
+        it != eit; ++it) 
+    {
+        NodeID id = it->first;
+        ConstraintGraph* g = it->second;
+        delete g;
+    }
+    rep2tempG.clear();
+}
 
 void SConstraintGraph::copyFCG(FConstraintGraph* fCG)
 {
@@ -862,11 +898,18 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* 
 
     SConstraintNode* originRepNode = getSConstraintNode(rep);
     rep = originRepNode->getId();
-
-    double buildTempGStart = stat->getClk();
-    ConstraintGraph* tempG = buildTempG(rep);
-    double buildTempGEnd = stat->getClk();
-    timeOfBuildTempG += (buildTempGEnd - buildTempGStart) / TIMEINTERVAL;
+    ConstraintGraph* tempG = nullptr;
+    if (rep2tempG.find(rep) != rep2tempG.end()){
+        tempG = rep2tempG[rep];
+        numOfSaveTempG ++;
+    }
+    else {
+        double buildTempGStart = stat->getClk();
+        tempG = buildTempG(rep);
+        double buildTempGEnd = stat->getClk();
+        timeOfBuildTempG += (buildTempGEnd - buildTempGStart) / TIMEINTERVAL;
+        rep2tempG[rep] = tempG;
+    }
 
     SCCDetection<ConstraintGraph*> d(tempG);
 
@@ -875,9 +918,12 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* 
     double findEnd = stat->getClk();
     timeOfSCCFind += (findEnd - findStart) / TIMEINTERVAL;
 
-    delete tempG;
+    // delete tempG;
+
     NodeStack& topoOrder = d.topoNodeStack();
     if (topoOrder.size() > 1) {
+        delete tempG;
+        rep2tempG.erase(rep);
         // 1. reset rep/sub relation
         double resetStart = stat->getClk();
         NodeBS allSubs = sccSubNodes(rep);
@@ -936,7 +982,7 @@ unsigned SConstraintGraph::sccBreakDetect(NodeID rep, NodeBS& allReps, PTAStat* 
         double restoreEdgeStart = stat->getClk();
         restoreEdge(originRepNode, allReps, stat);
         double restoreEdgeEnd = stat->getClk();
-        timeOfSCCEdgeRestore = (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
+        timeOfSCCEdgeRestore += (restoreEdgeEnd - restoreEdgeStart) / TIMEINTERVAL;
         numOfSCCRestore ++;
         if (!allReps.test(rep))
             removeSConstraintNode(originRepNode);
@@ -1092,27 +1138,52 @@ ConstraintGraph* SConstraintGraph::buildTempG(NodeID rep)
     for (NodeID nodeId: nodes)
         g->addConstraintNode(new ConstraintNode(nodeId), nodeId);
     
-    for (auto it = repSNode->directOutEdgeBegin(), eit = repSNode->directOutEdgeEnd();
-        it != eit; ++it)
-    {
-        SConstraintEdge* sEdge = *it;
-        if (sEdge->getDstID() == rep) {
-            for (FConstraintEdge* fEdge: sEdge->getFEdgeSet()) {
-                NodeID fsrc = fEdge->getSrcID();
-                NodeID fdst = fEdge->getDstID();
-                if (SVFUtil::isa<CopyFCGEdge>(fEdge)) {
-                    g->addCopyCGEdge(fsrc, fdst);
-                }
-                else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
-                    NormalGepFCGEdge* fgep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
-                    g->addNormalGepCGEdge(fsrc, fdst, fgep->getAccessPath());
-                }
-                else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge)) {
-                    g->addVariantGepCGEdge(fsrc, fdst);
-                }
-            }
+    SConstraintEdge* sCopyEdge = getSEdgeOrNullptr(repSNode, repSNode, SConstraintEdge::SCopy);
+    SConstraintEdge* sVGepEdge = getSEdgeOrNullptr(repSNode, repSNode, SConstraintEdge::SVariantGep);
+    SConstraintEdge* sNGepEdge = getSEdgeOrNullptr(repSNode, repSNode, SConstraintEdge::SNormalGep);
+    if (sCopyEdge != nullptr) {
+        for (FConstraintEdge* fEdge: sCopyEdge->getFEdgeSet()) {
+            NodeID fsrc = fEdge->getSrcID();
+            NodeID fdst = fEdge->getDstID();
+            g->addCopyCGEdge_V(fsrc, fdst);
         }
     }
+    if (sVGepEdge != nullptr) {
+        for (FConstraintEdge* fEdge: sVGepEdge->getFEdgeSet()) {
+            NodeID fsrc = fEdge->getSrcID();
+            NodeID fdst = fEdge->getDstID();
+            g->addVariantGepCGEdge_V(fsrc, fdst);
+        }
+    }
+    if (sNGepEdge != nullptr) {
+        for (FConstraintEdge* fEdge: sNGepEdge->getFEdgeSet()) {
+            NormalGepFCGEdge* fgep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
+            NodeID fsrc = fEdge->getSrcID();
+            NodeID fdst = fEdge->getDstID();
+            g->addNormalGepCGEdge_V(fsrc, fdst, fgep->getAccessPath());
+        }
+    }
+    // for (auto it = repSNode->directOutEdgeBegin(), eit = repSNode->directOutEdgeEnd();
+    //     it != eit; ++it)
+    // {
+    //     SConstraintEdge* sEdge = *it;
+    //     if (sEdge->getDstID() == rep) {
+    //         for (FConstraintEdge* fEdge: sEdge->getFEdgeSet()) {
+    //             NodeID fsrc = fEdge->getSrcID();
+    //             NodeID fdst = fEdge->getDstID();
+    //             if (SVFUtil::isa<CopyFCGEdge>(fEdge)) {
+    //                 g->addCopyCGEdge(fsrc, fdst);
+    //             }
+    //             else if (SVFUtil::isa<NormalGepFCGEdge>(fEdge)) {
+    //                 NormalGepFCGEdge* fgep = SVFUtil::dyn_cast<NormalGepFCGEdge>(fEdge);
+    //                 g->addNormalGepCGEdge(fsrc, fdst, fgep->getAccessPath());
+    //             }
+    //             else if (SVFUtil::isa<VariantGepFCGEdge>(fEdge)) {
+    //                 g->addVariantGepCGEdge(fsrc, fdst);
+    //             }
+    //         }
+    //     }
+    // }
     return g;
 }
 

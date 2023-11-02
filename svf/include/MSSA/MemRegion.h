@@ -46,6 +46,8 @@ namespace SVF
 {
 
 class BVDataPTAImpl;
+class MemSSAStat;
+class AndersenInc;
 
 typedef NodeID MRID;
 typedef NodeID MRVERID;
@@ -132,6 +134,16 @@ class MRGenerator
 {
 
 public:
+    static double timeOfCollectGlobals;
+    static double timeOfCollectModRefForLoadStore;
+    static double timeOfCollectModRefForCall;
+    static double timeOfPartitionMRs;
+    static double timeOfUpdateAliasMRs;
+    static double timeOfCollectCallSitePts;
+    static double timeOfModRefAnalysis;
+
+    MemSSAStat* stat;
+
     typedef FIFOWorkList<NodeID> WorkList;
 
     /// Get typedef from Pointer Analysis
@@ -195,6 +207,7 @@ public:
 private:
 
     BVDataPTAImpl* pta;
+    AndersenInc* incpta;
     SCC* callGraphSCC;
     PTACallGraph* callGraph;
     bool ptrOnlyMSSA;
@@ -247,7 +260,8 @@ private:
 
     //Get all objects might pass into callee from a callsite
     void collectCallSitePts(const CallICFGNode* cs);
-
+    void updateCallSitePts(const CallICFGNode* cs);
+    bool hasPtsChange(NodeBS& nodes);
     //Recursive collect points-to chain
     NodeBS& CollectPtsChain(NodeID id);
 
@@ -287,9 +301,11 @@ protected:
 
     /// Generate regions for loads/stores
     virtual void collectModRefForLoadStore();
+    virtual void updateModRefForLoadStore();
 
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
+    virtual void updateModRefForCall(); // TODO --wjy
 
     /// Partition regions
     virtual void partitionMRs();
@@ -338,11 +354,28 @@ protected:
 
     /// Add cpts to store/load
     //@{
+    inline void updateCPtsToStore(NodeBS& oldpts, NodeBS& newpts, NodeBS& delpts, NodeBS& inspts, 
+        const StoreStmt *st, const SVFFunction* fun)
+    {
+        storesToPointsToMap[st] = newpts;
+        funToPointsToMap[fun].erase(oldpts);
+        funToPointsToMap[fun].insert(newpts);
+        updateModSideEffectOfFunction(fun, delpts, inspts);
+    }
     inline void addCPtsToStore(NodeBS& cpts, const StoreStmt *st, const SVFFunction* fun)
     {
         storesToPointsToMap[st] = cpts;
         funToPointsToMap[fun].insert(cpts);
         addModSideEffectOfFunction(fun,cpts);
+    }
+
+    inline void updateCPtsToLoad(NodeBS& oldpts, NodeBS& newpts, NodeBS& delpts, NodeBS& inspts, 
+        const LoadStmt *ld, const SVFFunction* fun)
+    {
+        loadsToPointsToMap[ld] = newpts;
+        funToPointsToMap[fun].erase(oldpts);
+        funToPointsToMap[fun].insert(newpts);
+        updateRefSideEffectOfFunction(fun, delpts, inspts);
     }
     inline void addCPtsToLoad(NodeBS& cpts, const LoadStmt *ld, const SVFFunction* fun)
     {
@@ -350,6 +383,7 @@ protected:
         funToPointsToMap[fun].insert(cpts);
         addRefSideEffectOfFunction(fun,cpts);
     }
+    
     inline void addCPtsToCallSiteRefs(NodeBS& cpts, const CallICFGNode* cs)
     {
         callsiteToRefPointsToMap[cs] |= cpts;
@@ -377,8 +411,10 @@ protected:
     //@{
     /// Add indirect uses an memory object in the function
     void addRefSideEffectOfFunction(const SVFFunction* fun, const NodeBS& refs);
+    void updateRefSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods);
     /// Add indirect def an memory object in the function
     void addModSideEffectOfFunction(const SVFFunction* fun, const NodeBS& mods);
+    void updateModSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods);
     /// Add indirect uses an memory object in the function
     bool addRefSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& refs);
     /// Add indirect def an memory object in the function
@@ -429,7 +465,7 @@ public:
     }
 
     /// Start generating memory regions
-    virtual void generateMRs();
+    virtual void generateMRs(MemSSAStat* stat);
 
     /// Get the function which SVFIR Edge located
     const SVFFunction* getFunction(const PAGEdge* pagEdge) const

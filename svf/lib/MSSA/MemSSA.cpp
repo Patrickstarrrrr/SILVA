@@ -63,7 +63,7 @@ MemSSA::MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA)
 
     /// Generate whole program memory regions
     double mrStart = stat->getClk(true);
-    mrGen->generateMRs();
+    mrGen->generateMRs(stat);
     double mrEnd = stat->getClk(true);
     timeOfGeneratingMemRegions = (mrEnd - mrStart)/TIMEINTERVAL;
 }

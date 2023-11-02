@@ -36,6 +36,14 @@ using namespace std;
 
 const char* MemSSAStat::TotalTimeOfConstructMemSSA = "TotalMSSATime";	///< Total time for constructing memory SSA
 const char* MemSSAStat::TimeOfGeneratingMemRegions  = "GenRegionTime";	///< Time for allocating regions
+const char* MemSSAStat::TimeOfCollectGlobals = "-CollectGlobTime";
+const char* MemSSAStat::TimeOfCollectModRefForCall = "-CollectMR4CallTime";
+const char* MemSSAStat::TimeOfCollectModRefForLoadStore = "-CollectMR4LSTime";
+const char* MemSSAStat::TimeOfPartitionMRs = "-PartitionMRsTime";
+const char* MemSSAStat::TimeOfUpdateAliasMRs = "-UpdateAliasMRTime";
+const char* MemSSAStat::TimeOfCollectCallSitePts = "--CollectCSPtsTime";
+const char* MemSSAStat::TimeOfModRefAnalysis = "--MRAnalysisTime";
+
 const char* MemSSAStat::TimeOfCreateMUCHI  = "GenMUCHITime";	///< Time for generating mu/chi for load/store/calls
 const char* MemSSAStat::TimeOfInsertingPHI = "InsertPHITime";	///< Time for inserting phis
 const char* MemSSAStat::TimeOfSSARenaming = "SSARenameTime";	///< Time for SSA rename
@@ -95,6 +103,14 @@ void MemSSAStat::performStat()
 
     timeStatMap[TotalTimeOfConstructMemSSA] = (endTime - startTime)/TIMEINTERVAL;
     timeStatMap[TimeOfGeneratingMemRegions] = MemSSA::timeOfGeneratingMemRegions;
+    timeStatMap[TimeOfCollectGlobals] = MRGenerator::timeOfCollectGlobals;
+    timeStatMap[TimeOfCollectModRefForLoadStore] = MRGenerator::timeOfCollectModRefForLoadStore;
+    timeStatMap[TimeOfCollectModRefForCall] = MRGenerator::timeOfCollectModRefForCall;
+    timeStatMap[TimeOfPartitionMRs] = MRGenerator::timeOfPartitionMRs;
+    timeStatMap[TimeOfUpdateAliasMRs] = MRGenerator::timeOfUpdateAliasMRs;
+    timeStatMap[TimeOfCollectCallSitePts] = MRGenerator::timeOfCollectCallSitePts;
+    timeStatMap[TimeOfModRefAnalysis] = MRGenerator::timeOfModRefAnalysis;
+    
     timeStatMap[TimeOfCreateMUCHI] =  MemSSA::timeOfCreateMUCHI;
     timeStatMap[TimeOfInsertingPHI] =  MemSSA::timeOfInsertingPHI;
     timeStatMap[TimeOfSSARenaming] =  MemSSA::timeOfSSARenaming;

@@ -318,6 +318,7 @@ void AndersenIncStat::performStat()
     timeStatMap["SCGDeleteTime"] = AndersenInc::timeOfSCGDelete;
     timeStatMap["SCGRebuildTime"] = AndersenInc::timeOfSCGRebuild;
     timeStatMap["TempGBuildTime"] = SConstraintGraph::timeOfBuildTempG;
+    timeStatMap["SaveSCCNum"] = SConstraintGraph::numOfSaveTempG;
     timeStatMap["SCCFindTime"] = SConstraintGraph::timeOfSCCFind;
     timeStatMap["ResetRepSubTime"] = SConstraintGraph::timeOfResetRepSub;
     timeStatMap["SCCEdgeRestoreTime"] = SConstraintGraph::timeOfSCCEdgeRestore;

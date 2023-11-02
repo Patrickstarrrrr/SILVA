@@ -1010,4 +1010,16 @@ const Option<u32_t> Options::IncStep(
     "The number of statements processed per incremental anaylsis round.",
     1
 );
+
+const Option<double> Options::ChangeProportion(
+    "change-p",
+    "The proportion of change code",
+    0
+);
+
+const Option<u32_t> Options::IncRound(
+    "inc-round",
+    "The rounds num",
+    10
+);
 } // namespace SVF.

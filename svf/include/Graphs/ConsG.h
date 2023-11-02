@@ -142,7 +142,43 @@ public:
             assert(false && "no other kind!");
         return false;
     }
-
+    inline ConstraintEdge* getEdgeOrNullptr(ConstraintNode* src, ConstraintNode* dst, ConstraintEdge::ConstraintEdgeK kind)
+    {
+        ConstraintEdge edge(src,dst,kind);
+        if(kind == ConstraintEdge::Copy || kind == ConstraintEdge::NormalGep || kind == ConstraintEdge::VariantGep)
+        {
+            auto eit = directEdgeSet.find(&edge);
+            if (eit == directEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == ConstraintEdge::Addr)
+        {
+            auto eit = AddrCGEdgeSet.find(&edge);
+            if (eit == AddrCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == ConstraintEdge::Store)
+        {
+            auto eit = StoreCGEdgeSet.find(&edge);
+            if (eit == StoreCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == ConstraintEdge::Load)
+        {
+            auto eit = LoadCGEdgeSet.find(&edge);
+            if (eit == LoadCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else
+        {
+            assert(false && "no other kind!");
+            return nullptr;
+        }
+    }
     /// Get an edge via its src and dst nodes and kind
     inline ConstraintEdge* getEdge(ConstraintNode* src, ConstraintNode* dst, ConstraintEdge::ConstraintEdgeK kind)
     {
@@ -180,9 +216,12 @@ public:
     AddrCGEdge* addAddrCGEdge(NodeID src, NodeID dst);
     /// Add Copy edge
     CopyCGEdge* addCopyCGEdge(NodeID src, NodeID dst);
+    void addCopyCGEdge_V(NodeID src, NodeID dst);
     /// Add Gep edge
     NormalGepCGEdge* addNormalGepCGEdge(NodeID src, NodeID dst, const AccessPath& ap);
+    void addNormalGepCGEdge_V(NodeID src, NodeID dst, const AccessPath& ap);
     VariantGepCGEdge* addVariantGepCGEdge(NodeID src, NodeID dst);
+    void addVariantGepCGEdge_V(NodeID src, NodeID dst);
     /// Add Load edge
     LoadCGEdge* addLoadCGEdge(NodeID src, NodeID dst);
     /// Add Store edge

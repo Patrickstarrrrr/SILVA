@@ -16,6 +16,13 @@ class SConstraintGraph : public GenericGraph<SConstraintNode, SConstraintEdge>
 {
 
 public:
+    typedef std::unordered_map<NodeID, ConstraintGraph*> ID2GMap;
+    ID2GMap rep2tempG;
+
+    void removeTempGEdge(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
+
+    void cleanRep2TempG();
+public:
     typedef OrderedMap<NodeID, SConstraintNode *> SConstraintNodeIDToNodeMapTy;
     typedef SConstraintEdge::SConstraintEdgeSetTy::iterator SConstraintNodeIter;
     typedef Map<NodeID, NodeID> NodeToRepMap;
@@ -85,6 +92,7 @@ public:
     static double timeOfSCCFind;
     static double timeOfSCCEdgeRestore;
     static double timeOfBuildTempG;
+    static unsigned numOfSaveTempG;
     static double timeOfResetRepSub;
     static double timeOfCollectEdge;
     static double timeOfRemoveEdge;
@@ -149,7 +157,43 @@ public:
             assert(false && "no other kind!");
         return false;
     }
-
+    inline SConstraintEdge* getSEdgeOrNullptr(SConstraintNode* src, SConstraintNode* dst, SConstraintEdge::SConstraintEdgeK kind)
+    {
+        SConstraintEdge edge(src,dst,kind);
+        if(kind == SConstraintEdge::SCopy || kind == SConstraintEdge::SNormalGep || kind == SConstraintEdge::SVariantGep)
+        {
+            auto eit = directSEdgeSet.find(&edge);
+            if (eit == directSEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == SConstraintEdge::SAddr)
+        {
+            auto eit = AddrSCGEdgeSet.find(&edge);
+            if (eit == AddrSCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == SConstraintEdge::SStore)
+        {
+            auto eit = StoreSCGEdgeSet.find(&edge);
+            if (eit == StoreSCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else if(kind == SConstraintEdge::SLoad)
+        {
+            auto eit = LoadSCGEdgeSet.find(&edge);
+            if (eit == LoadSCGEdgeSet.end())
+                return nullptr;
+            return *eit;
+        }
+        else
+        {
+            assert(false && "no other kind!");
+            return nullptr;
+        }
+    }
     /// Get an edge via its src and dst nodes and kind
     inline SConstraintEdge* getEdge(SConstraintNode* src, SConstraintNode* dst, SConstraintEdge::SConstraintEdgeK kind)
     {

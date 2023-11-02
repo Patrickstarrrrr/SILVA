@@ -49,7 +49,7 @@ public:
 typedef WPASolver<SConstraintGraph*> WPASConstraintSolver;
 class AndersenInc: public WPASConstraintSolver, public BVDataPTAImpl
 {
-
+    
 private:
     static AndersenInc* incpta;
     // static AndersenWaveDiff* wdpta;
@@ -57,6 +57,7 @@ private:
 
 protected:
     /// Flat Constraint Graph
+    
     FConstraintGraph* fCG;
     /// Super Constraint Graph
     SConstraintGraph* sCG;
@@ -157,7 +158,7 @@ public:
     typedef SCCDetection<SConstraintGraph*> CGSCC;
     typedef OrderedMap<CallSite, NodeID> CallSite2DummyValPN;
     typedef Map<NodeID, NodeID>  ID2IDMap;
-
+    
     ID2IDMap field2Base;
     /// Reset data
     inline void resetData()
@@ -386,8 +387,31 @@ private:
     PtsDiffMap fpPtsDiffMap; // fun ptr pts diff
     PtsDiffMap allPtsDiffMap; // all ptr pts diff
     u32_t incRound;
-
-
+    NodeBS ptsChangeNodes;
+    // NodeBS ptsChainChangeNodes;
+public:
+    // void computePtsChainChangeNodes();
+    // NodeBS& addRevChainNode(NodeID src);
+    inline const NodeBS& getPtsChangeNodes()
+    {
+        return ptsChangeNodes;
+    }
+    inline bool isPtsChange(NodeID id)
+    {
+        return ptsChangeNodes.test(id);
+    }
+    inline const PointsTo& getInsPts(NodeID id)
+    {
+        return allPtsDiffMap[id]->insPts;
+    }
+    inline const PointsTo& getDelPts(NodeID id)
+    {
+        return allPtsDiffMap[id]->delPts;
+    }
+    inline const PointsTo& getPrePts(NodeID id)
+    {
+        return allPtsDiffMap[id]->prePts;
+    }
 public:
     bool pushIntoDelEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
     bool pushIntoInsEdgesWL(NodeID src, NodeID dst, FConstraintEdge::FConstraintEdgeK kind);
@@ -395,6 +419,7 @@ public:
 private:
     void singleIncremental(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind, int count);
     void stepIncremental();
+    void changeProportionInc();
     /// handling deletion
     //@{
     void processDeletion();

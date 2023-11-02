@@ -205,7 +205,19 @@ CopyCGEdge* ConstraintGraph::addCopyCGEdge(NodeID src, NodeID dst)
     dstNode->addIncomingCopyEdge(edge);
     return edge;
 }
+void ConstraintGraph::addCopyCGEdge_V(NodeID src, NodeID dst)
+{
 
+    ConstraintNode* srcNode = getConstraintNode(src);
+    ConstraintNode* dstNode = getConstraintNode(dst);
+
+    CopyCGEdge* edge = new CopyCGEdge(srcNode, dstNode, edgeIndex++);
+
+    directEdgeSet.insert(edge);
+
+    srcNode->addOutgoingCopyEdge(edge);
+    dstNode->addIncomingCopyEdge(edge);
+}
 
 /*!
  * Add Gep edge
@@ -228,6 +240,19 @@ NormalGepCGEdge*  ConstraintGraph::addNormalGepCGEdge(NodeID src, NodeID dst, co
     dstNode->addIncomingGepEdge(edge);
     return edge;
 }
+void  ConstraintGraph::addNormalGepCGEdge_V(NodeID src, NodeID dst, const AccessPath& ap)
+{
+    ConstraintNode* srcNode = getConstraintNode(src);
+    ConstraintNode* dstNode = getConstraintNode(dst);
+
+    NormalGepCGEdge* edge =
+        new NormalGepCGEdge(srcNode, dstNode, ap, edgeIndex++);
+
+    directEdgeSet.insert(edge);
+
+    srcNode->addOutgoingGepEdge(edge);
+    dstNode->addIncomingGepEdge(edge);
+}
 
 /*!
  * Add variant gep edge
@@ -248,6 +273,18 @@ VariantGepCGEdge* ConstraintGraph::addVariantGepCGEdge(NodeID src, NodeID dst)
     srcNode->addOutgoingGepEdge(edge);
     dstNode->addIncomingGepEdge(edge);
     return edge;
+}
+void ConstraintGraph::addVariantGepCGEdge_V(NodeID src, NodeID dst)
+{
+    ConstraintNode* srcNode = getConstraintNode(src);
+    ConstraintNode* dstNode = getConstraintNode(dst);
+
+    VariantGepCGEdge* edge = new VariantGepCGEdge(srcNode, dstNode, edgeIndex++);
+
+    directEdgeSet.insert(edge);
+
+    srcNode->addOutgoingGepEdge(edge);
+    dstNode->addIncomingGepEdge(edge);
 }
 
 /*!

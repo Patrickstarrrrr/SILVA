@@ -377,7 +377,17 @@ private:
         value = s;
         return true;
     }
-
+    static bool fromString(const std::string s, double &value)
+    {
+        if (s.empty()) return false;
+        for (char c : s)
+        {
+            if ( (c != '.') && !(c >= '0' && c <= '9')) return false;
+        }
+        std::istringstream iss(s);
+        iss >> value;
+        return true;
+    }
     // Convert string to u32_t, returning whether we succeeded.
     static bool fromString(const std::string s, u32_t &value)
     {

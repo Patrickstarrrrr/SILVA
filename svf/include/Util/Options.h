@@ -294,6 +294,8 @@ public:
     static const Option<u32_t> LoadStartingRound;
     static const Option<u32_t> LoadSpecificRound;
     static const Option<u32_t> IncStep;
+    static const Option<double> ChangeProportion;
+    static const Option<u32_t> IncRound;
 };
 }  // namespace SVF
 

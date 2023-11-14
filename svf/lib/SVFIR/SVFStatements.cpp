@@ -45,8 +45,8 @@ SVFStmt::Var2LabelMap SVFStmt::var2LabelMap;
 /*!
  * SVFStmt constructor
  */
-SVFStmt::SVFStmt(SVFVar* s, SVFVar* d, GEdgeFlag k, bool real) :
-    GenericPAGEdgeTy(s,d,k),value(nullptr),basicBlock(nullptr),icfgNode(nullptr),edgeId(UINT_MAX)
+SVFStmt::SVFStmt(SVFVar* s, SVFVar* d, GEdgeFlag k, bool real, bool isDel, bool isIns) :
+    GenericPAGEdgeTy(s,d,k),value(nullptr),basicBlock(nullptr),icfgNode(nullptr),edgeId(UINT_MAX),isDeleted(isDel),isInserted(isIns)
 {
     if(real)
     {

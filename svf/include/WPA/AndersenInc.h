@@ -366,6 +366,7 @@ public:
     };
     typedef std::unordered_map<NodeID, PtsDiff*> PtsDiffMap;
     typedef std::unordered_map<NodeID, std::set<SDK*>> RepEdgeSetMap;
+    typedef std::unordered_set<PAGEdge*> StmtSet;
 
 private:
     bool SCCBreak;
@@ -388,8 +389,12 @@ private:
     PtsDiffMap allPtsDiffMap; // all ptr pts diff
     u32_t incRound;
     NodeBS ptsChangeNodes;
+    StmtSet delStmts; // TODO: -- wjy
+    StmtSet insStmts; // TODO: -- wjy
     // NodeBS ptsChainChangeNodes;
 public:
+    inline StmtSet& getDelStmts() { return delStmts; }
+    inline StmtSet& getInsStmts() { return insStmts; }
     // void computePtsChainChangeNodes();
     // NodeBS& addRevChainNode(NodeID src);
     inline const NodeBS& getPtsChangeNodes()

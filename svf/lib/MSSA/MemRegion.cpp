@@ -246,17 +246,19 @@ void MRGenerator::collectModRefForLoadStore()
         }
     }
 }
-
 /*!
  * Update memory regions for loads/stores
  */
-void MRGenerator::updateModRefForLoadStore()
+void MRGenerator::initChangedFunctions()
 {
 
     SVFModule* svfModule = incpta->getModule();
+
+    // Collect store changed functions
     for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
             ++fi)
     {
+        bool nextFunc = false;
         const SVFFunction& fun = **fi;
 
         /// if this function does not have any caller, then we do not care its MSSA
@@ -276,53 +278,284 @@ void MRGenerator::updateModRefForLoadStore()
                             pagEdgeList.end(); bit != ebit; ++bit)
                 {
                     const PAGEdge* inst = *bit;
-                    pagEdgeToFunMap[inst] = &fun;
+                    // pagEdgeToFunMap[inst] = &fun;
                     if (const StoreStmt *st = SVFUtil::dyn_cast<StoreStmt>(inst))
                     {
                         NodeID id = st->getLHSVarID();
-                        if (!incpta->isPtsChange(id))
-                            continue;
-                        NodeBS precpts(incpta->getPrePts(id).toNodeBS());
-                        NodeBS newcpts(incpta->getPts(id).toNodeBS());
-                        NodeBS delcpts(incpta->getDelPts(id).toNodeBS());
-                        NodeBS inscpts(incpta->getInsPts(id).toNodeBS());
-                        updateCPtsToStore(precpts, newcpts, delcpts, inscpts, st, &fun);
-                        // // exhaustive {
-                        // NodeBS cpts(incpta->getPts(st->getLHSVarID()).toNodeBS());
-                        // // TODO: change this assertion check later when we have conditional points-to set
-                        // if (cpts.empty())
-                        //     continue;
-                        // assert(!cpts.empty() && "null pointer!!");
-                        // addCPtsToStore(cpts, st, &fun);
-                        // // exhaustive }
-                    }
-
-                    else if (const LoadStmt *ld = SVFUtil::dyn_cast<LoadStmt>(inst))
-                    {
-                        NodeID id = ld->getRHSVarID();
-                        if (!incpta->isPtsChange(id))
-                            continue;
-                        NodeBS precpts(incpta->getPrePts(id).toNodeBS());
-                        NodeBS newcpts(incpta->getPts(id).toNodeBS());
-                        NodeBS delcpts(incpta->getDelPts(id).toNodeBS());
-                        NodeBS inscpts(incpta->getInsPts(id).toNodeBS());
-                        updateCPtsToLoad(precpts, newcpts, delcpts, inscpts, ld, &fun);
-                        // // exhaustive {
-                        // NodeBS cpts(pta->getPts(ld->getRHSVarID()).toNodeBS());
-                        // // TODO: change this assertion check later when we have conditional points-to set
-                        // if (cpts.empty())
-                        //     continue;
-                        // assert(!cpts.empty() && "null pointer!!");
-                        // addCPtsToLoad(cpts, ld, &fun);
-                        // // exaustive }
+                        if (incpta->isPtsChange(id) || st->isDeleted || st->isInserted) 
+                        {
+                            storeChangedFunctions.insert(&fun);
+                            nextFunc = true;
+                            break;
+                        }
                     }
                 }
+                if (nextFunc)
+                    break;
             }
+            if (nextFunc)
+                break;
+        }
+    }
+
+    // Collect load changed functions
+    for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
+            ++fi)
+    {
+        bool nextFunc = false;
+        const SVFFunction& fun = **fi;
+
+        /// if this function does not have any caller, then we do not care its MSSA
+        if (Options::IgnoreDeadFun() && fun.isUncalledFunction())
+            continue;
+        
+        for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
+                iter != eiter; ++iter)
+        {
+            const SVFBasicBlock* bb = *iter;
+            for (SVFBasicBlock::const_iterator bit = bb->begin(), ebit = bb->end();
+                    bit != ebit; ++bit)
+            {
+                const SVFInstruction* svfInst = *bit;
+                SVFStmtList& pagEdgeList = getPAGEdgesFromInst(svfInst);
+                for (SVFStmtList::iterator bit = pagEdgeList.begin(), ebit =
+                            pagEdgeList.end(); bit != ebit; ++bit)
+                {
+                    const PAGEdge* inst = *bit;
+                    // pagEdgeToFunMap[inst] = &fun;
+
+                    if (const LoadStmt *ld = SVFUtil::dyn_cast<LoadStmt>(inst))
+                    {
+                        NodeID id = ld->getRHSVarID();
+                        if (incpta->isPtsChange(id) || ld->isDeleted || ld->isInserted) 
+                        {
+                            loadChangedFunctions.insert(&fun);
+                            nextFunc = true;
+                            break;
+                        }
+                    }
+                }
+                if (nextFunc)
+                    break;
+            }
+            if (nextFunc)
+                break;
         }
     }
 }
+/*!
+ * Generate memory regions for loads/stores
+ */
+void MRGenerator::collectModRefForLoadStore_inc()
+{
 
+    SVFModule* svfModule = incpta->getModule();
+    for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
+            ++fi)
+    {
+        const SVFFunction& fun = **fi;
 
+        /// if this function does not have any caller, then we do not care its MSSA
+        if (Options::IgnoreDeadFun() && fun.isUncalledFunction())
+            continue;
+        bool storeUnchanged = storeChangedFunctions.find(&fun) == storeChangedFunctions.end();
+        bool loadUnchanged = loadChangedFunctions.find(&fun) == loadChangedFunctions.end();
+        if (storeUnchanged && loadUnchanged)
+        {
+            // Do not handle unchanged function
+            continue;
+        }
+        // handle changed function
+        // 1. handle store changed function
+        if (!storeUnchanged) {
+            // 1.1 save old funToMods_ls and recompute funToMods_ls
+            NodeBS oldFunToMods_ls = funToModsMap_ls[&fun];
+            funToModsMap_ls[&fun].clear();
+
+            // 1.2 recompute funToMods
+            for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
+                    iter != eiter; ++iter)
+            {                
+                const SVFBasicBlock* bb = *iter;
+                for (SVFBasicBlock::const_iterator bit = bb->begin(), ebit = bb->end();
+                        bit != ebit; ++bit)
+                {
+                    const SVFInstruction* svfInst = *bit;
+                    SVFStmtList& pagEdgeList = getPAGEdgesFromInst(svfInst);
+                    for (SVFStmtList::iterator bit = pagEdgeList.begin(), ebit =
+                                pagEdgeList.end(); bit != ebit; ++bit)
+                    {
+                        const PAGEdge* inst = *bit;
+                        if (inst->isDeleted) //TODO: handle del inst? -- wjy
+                            continue;
+                        // pagEdgeToFunMap[inst] = &fun; 
+                        if (const StoreStmt *st = SVFUtil::dyn_cast<StoreStmt>(inst))
+                        {
+                            NodeBS cpts(incpta->getPts(st->getLHSVarID()).toNodeBS());
+                            // TODO: change this assertion check later when we have conditional points-to set
+                            if (cpts.empty())
+                                continue;
+                            assert(!cpts.empty() && "null pointer!!");
+                            addCPtsToStore_inc(cpts, st, &fun);
+                        }
+                    } // end for each inst in pagedgelist
+                } // end for each svfinst in bb
+            } // end for each bb in fun (end 1.2)
+
+            // 1.3 compare new/old funToMods_ls
+            NodeBS& newFunToMods_ls = funToModsMap_ls[&fun];
+            if (oldFunToMods_ls != newFunToMods_ls) {
+                mods_lsChangedFunctions.insert(&fun);
+                funToModsMap_ls_t[&fun] = oldFunToMods_ls;
+            }
+        }   // end if (!storeUnchanged)
+
+        // 2. handle changed function
+        if (!loadUnchanged) {
+            // 2.1. save old funToRefs and recompute funToRefs_ls
+            NodeBS oldFunToRefs_ls = funToRefsMap_ls[&fun];
+            funToRefsMap_ls[&fun].clear();
+
+            // 2.2 recompute funToRefs/funToMods
+            for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
+                    iter != eiter; ++iter)
+            { 
+                const SVFBasicBlock* bb = *iter;
+                for (SVFBasicBlock::const_iterator bit = bb->begin(), ebit = bb->end();
+                        bit != ebit; ++bit)
+                {
+                    const SVFInstruction* svfInst = *bit;
+                    SVFStmtList& pagEdgeList = getPAGEdgesFromInst(svfInst);
+                    for (SVFStmtList::iterator bit = pagEdgeList.begin(), ebit =
+                                pagEdgeList.end(); bit != ebit; ++bit)
+                    {
+                        const PAGEdge* inst = *bit;
+                        if (inst->isDeleted) //TODO: handle del inst? -- wjy
+                            continue;
+                        // pagEdgeToFunMap[inst] = &fun; 
+                        if (const LoadStmt *ld = SVFUtil::dyn_cast<LoadStmt>(inst))
+                        {
+                            NodeBS cpts(incpta->getPts(ld->getRHSVarID()).toNodeBS());
+                            // TODO: change this assertion check later when we have conditional points-to set
+                            if (cpts.empty())
+                                continue;
+                            assert(!cpts.empty() && "null pointer!!");
+                            addCPtsToLoad_inc(cpts, ld, &fun);
+                        } 
+                    } // end for each inst in pagedgelist
+                } // end for each svfinst in bb
+            } // end for each bb in fun
+
+            // 2.3
+            NodeBS& newFunToRefs_ls = funToRefsMap_ls[&fun];
+            if (oldFunToRefs_ls != newFunToRefs_ls) {
+                refs_lsChangedFunctions.insert(&fun);
+                funToRefsMap_ls_t[&fun] = oldFunToRefs_ls;
+            }
+        } // end if (!loadUnchanged)
+    }
+}
+
+void MRGenerator::collectModRefForCall_inc()
+{
+    // U/D_callsite |= (N_callsite \intersection U/D_callee) \union (G \intersection U/D_callee)
+    // 
+    // 1. reset and propagate del ref and del mod bottom-up ly based on old globs and argspts/retspts
+    // 2. recompute globs and get del globs
+    // 3. recompute argspts/retspts and get del argspts/retspts
+    // 4. reset and propagate del globs and del argspts/retspts 
+    //      bottom-up ly base on the function mod/ref set changed
+
+    // 1. reset and propagate del ref and del mod bottom-up ly based on old globs and argspts/retspts
+    WorkList worklist;
+    WorkList modlist;
+    WorkList reflist;
+    getCallGraphSCCRevTopoOrder(worklist);
+    while (!worklist.empty()) {
+        NodeID callGraphNodeID = worklist.pop();
+        const NodeBS& subNodes = callGraphSCC->subNodes(callGraphNodeID);
+        for(NodeBS::iterator it = subNodes.begin(), eit = subNodes.end(); it!=eit; ++it)
+        {
+            PTACallGraphNode* subCallGraphNode = callGraph->getCallGraphNode(*it);
+            /// Get mod-ref of all callsites calling callGraphNode
+            const SVFFunction* fun = subCallGraphNode->getFunction();
+            // 1. modChanged
+            // 2. refChanged
+            // 3. argsPtsChanged
+            if (mods_lsChangedFunctions.find(fun) != mods_lsChangedFunctions.end())
+            {
+                const NodeBS newMod_ls = funToModsMap_ls[fun];
+                const NodeBS oldMod_ls = funToModsMap_ls_t[fun];
+                NodeBS dMod = oldMod_ls - newMod_ls;
+                if (!dMod.empty()) {
+                    for (NodeID o: dMod) {
+                        funToModsMap[fun].reset(o);
+                    }
+                    funToDelModsMap[fun] |= dMod;
+                    modlist.push((*it));
+                }
+            }
+            if (refs_lsChangedFunctions.find(fun) != refs_lsChangedFunctions.end())
+            {
+                const NodeBS newRef_ls = funToRefsMap_ls[fun];
+                const NodeBS oldRef_ls = funToRefsMap_ls_t[fun];
+                NodeBS dRef = oldRef_ls - newRef_ls;
+                if (!dRef.empty()) {
+                    for (NodeID o: dRef) {
+                        funToRefsMap[fun].reset(o);
+                    }
+                    funToDelRefsMap[fun] |= dRef;
+                    reflist.push((*it));
+                }
+            }
+            
+        }
+    }
+    while (!modlist.empty()) {
+        NodeID callGraphNodeID = worklist.pop();
+        PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
+        delModAnalysis(callGraphNode, modlist);
+    }
+    while (!reflist.empty()) {
+        NodeID callGraphNodeID = worklist.pop();
+        PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
+        delRefAnalysis(callGraphNode, reflist);
+    }
+    funToDelModsMap.clear();
+    funToDelRefsMap.clear();
+    // 2. recompute globs and get del globs
+    allGlobals_t = allGlobals;
+    allGlobals.clear();
+    collectGlobals();
+
+    dGlobs = allGlobals_t - allGlobals;
+    // 3. recompute argspts/retspts and get del argspts/retspts
+    cachedPtsChainMap.clear(); // clear cachedPtsChainMap
+
+    for(SVFIR::CallSiteSet::const_iterator it =  pta->getPAG()->getCallSiteSet().begin(),
+            eit = pta->getPAG()->getCallSiteSet().end(); it!=eit; ++it)
+    {
+        const CallICFGNode* cnode = (*it);
+        collectCallSitePts_inc((*it));
+    }
+    // 4. reset and propagate del globs and del argspts/retspts 
+    //      bottom-up ly base on the function mod/ref set changed
+    getCallGraphSCCRevTopoOrder(worklist);
+    while(!worklist.empty())
+    {
+        NodeID callGraphNodeID = worklist.pop();
+        /// handle all sub scc nodes of this rep node
+        const NodeBS& subNodes = callGraphSCC->subNodes(callGraphNodeID);
+        for(NodeBS::iterator it = subNodes.begin(), eit = subNodes.end(); it!=eit; ++it)
+        {
+            PTACallGraphNode* subCallGraphNode = callGraph->getCallGraphNode(*it);
+            /// Get mod-ref of all callsites calling callGraphNode
+            // const SVFFunction* fun = subCallGraphNode->getFunction();
+            delGlobsArgsRetsPtsAnalysis(subCallGraphNode, worklist);
+        }
+    }
+
+}
 /*!
  * Generate memory regions for calls
  */
@@ -359,6 +592,25 @@ void MRGenerator::collectModRefForCall()
         }
     }
     double mrEnd = stat->getClk(true);
+    SVFUtil::outs() << "Mod Ref Round 1: " << (mrEnd - mrStart)/TIMEINTERVAL;
+    // round2
+    // getCallGraphSCCRevTopoOrder(worklist);
+    // double mrStart2 = stat->getClk(true);
+    // while(!worklist.empty())
+    // {
+    //     NodeID callGraphNodeID = worklist.pop();
+    //     /// handle all sub scc nodes of this rep node
+    //     const NodeBS& subNodes = callGraphSCC->subNodes(callGraphNodeID);
+    //     for(NodeBS::iterator it = subNodes.begin(), eit = subNodes.end(); it!=eit; ++it)
+    //     {
+    //         PTACallGraphNode* subCallGraphNode = callGraph->getCallGraphNode(*it);
+    //         /// Get mod-ref of all callsites calling callGraphNode
+    //         modRefAnalysis(subCallGraphNode,worklist);
+    //     }
+    // }
+    // double mrEnd2 = stat->getClk(true);
+    // // round2
+    // SVFUtil::outs() << "Mod Ref Round 2: " << (mrEnd2 - mrStart2)/TIMEINTERVAL;
     timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
 
     DBOUT(DGENERAL, outs() << pasMsg("\t\tAdd PointsTo to Callsites \n"));
@@ -517,17 +769,49 @@ void MRGenerator::addRefSideEffectOfFunction(const SVFFunction* fun, const NodeB
             funToRefsMap[fun].set(*it);
     }
 }
-void MRGenerator::updateRefSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods)
+void MRGenerator::addRefSideEffectOfFunction_loadStore(const SVFFunction* fun, const NodeBS& refs)
 {
-    for(NodeBS::iterator it = delmods.begin(), eit = delmods.end(); it!=eit; ++it)
+    for(NodeBS::iterator it = refs.begin(), eit = refs.end(); it!=eit; ++it)
     {
-        if(isNonLocalObject(*it,fun))
-            funToRefsMap[fun].reset(*it);
-    }
-    for(NodeBS::iterator it = insmods.begin(), eit = insmods.end(); it!=eit; ++it)
-    {
-        if(isNonLocalObject(*it,fun))
+        if(isNonLocalObject(*it,fun)) {
             funToRefsMap[fun].set(*it);
+            funToRefsMap_ls[fun].set(*it);
+        }
+    }
+}
+void MRGenerator::addRefSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& refs)
+{
+    for(NodeBS::iterator it = refs.begin(), eit = refs.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            funToRefsMap[fun].set(*it);
+            funToRefsMap_cs[fun].set(*it);
+        }
+    }
+}
+void MRGenerator::delRefSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& refs, NodeBS& delRefs)
+{
+    for(NodeBS::iterator it = refs.begin(), eit = refs.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            // funToRefsMap[fun].reset(*it);
+            funToRefsMap_cs[fun].reset(*it);
+            if ( (!funToRefsMap_ls[fun].test(*it)) && (funToRefsMap[fun].test(*it)) ) {
+                // not by load/store  (aka. only by callsite)
+                funToRefsMap[fun].reset(*it);
+                delRefs.set(*it);
+            }
+        }
+    }
+}
+void MRGenerator::addRefSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& refs)
+{
+    for(NodeBS::iterator it = refs.begin(), eit = refs.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            // funToRefsMap[fun].set(*it);
+            funToRefsMap_ls[fun].set(*it);
+        }
     }
 }
 
@@ -542,17 +826,49 @@ void MRGenerator::addModSideEffectOfFunction(const SVFFunction* fun, const NodeB
             funToModsMap[fun].set(*it);
     }
 }
-void MRGenerator::updateModSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods)
+void MRGenerator::addModSideEffectOfFunction_loadStore(const SVFFunction* fun, const NodeBS& mods)
 {
-    for(NodeBS::iterator it = delmods.begin(), eit = delmods.end(); it!=eit; ++it)
+    for(NodeBS::iterator it = mods.begin(), eit = mods.end(); it!=eit; ++it)
     {
-        if(isNonLocalObject(*it,fun))
-            funToModsMap[fun].reset(*it);
-    }
-    for(NodeBS::iterator it = insmods.begin(), eit = insmods.end(); it!=eit; ++it)
-    {
-        if(isNonLocalObject(*it,fun))
+        if(isNonLocalObject(*it,fun)) {
             funToModsMap[fun].set(*it);
+            funToModsMap_ls[fun].set(*it);
+        }
+    }
+}
+void MRGenerator::addModSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& mods)
+{
+    for(NodeBS::iterator it = mods.begin(), eit = mods.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            funToModsMap[fun].set(*it);
+            funToModsMap_cs[fun].set(*it);
+        }
+    }
+}
+void MRGenerator::delModSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& mods, NodeBS& delMods)
+{
+    for(NodeBS::iterator it = mods.begin(), eit = mods.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            // funToModsMap[fun].reset(*it);
+            funToModsMap_cs[fun].reset(*it);
+            if ((!funToModsMap_ls[fun].test(*it)) && (funToModsMap[fun].test(*it))) {
+                // not by load/store  (aka. only by callsite)
+                funToModsMap[fun].reset(*it);
+                delMods.set(*it);
+            }
+        }
+    }
+}
+void MRGenerator::addModSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& mods)
+{
+    for(NodeBS::iterator it = mods.begin(), eit = mods.end(); it!=eit; ++it)
+    {
+        if(isNonLocalObject(*it,fun)) {
+            // funToModsMap[fun].set(*it);
+            funToModsMap_ls[fun].set(*it);
+        }
     }
 }
 
@@ -566,7 +882,8 @@ bool MRGenerator::addRefSideEffectOfCallSite(const CallICFGNode* cs, const NodeB
         NodeBS refset = refs;
         refset &= getCallSiteArgsPts(cs);
         getEscapObjviaGlobals(refset,refs);
-        addRefSideEffectOfFunction(cs->getCaller(),refset);
+        // addRefSideEffectOfFunction(cs->getCaller(),refset);
+        addRefSideEffectOfFunction_callSite(cs->getCaller(),refset);
         return csToRefsMap[cs] |= refset;
     }
     return false;
@@ -582,7 +899,8 @@ bool MRGenerator::addModSideEffectOfCallSite(const CallICFGNode* cs, const NodeB
         NodeBS modset = mods;
         modset &= (getCallSiteArgsPts(cs) | getCallSiteRetPts(cs));
         getEscapObjviaGlobals(modset,mods);
-        addModSideEffectOfFunction(cs->getCaller(),modset);
+        // addModSideEffectOfFunction(cs->getCaller(),modset);
+        addModSideEffectOfFunction_callSite(cs->getCaller(),modset);
         return csToModsMap[cs] |= modset;
     }
     return false;
@@ -620,9 +938,8 @@ bool MRGenerator::hasPtsChange(NodeBS& nodes)
     return res;
 }
 
-void MRGenerator::updateCallSitePts(const CallICFGNode* cs)
+void MRGenerator::collectCallSitePts_inc(const CallICFGNode* cs)
 {
-    cachedPtsChainMap.clear();
 
     NodeBS& argsPts = csToCallSiteArgsPtsMap[cs];
     SVFIR* pag = incpta->getPAG();
@@ -643,6 +960,7 @@ void MRGenerator::updateCallSitePts(const CallICFGNode* cs)
     NodeBS args_U_argsPts = argsBS|argsPts;
     if (hasPtsChange(args_U_argsPts)) {
         // Recompute ptschain if argsPts contains node whose pts is changed.
+        csToCallSiteArgsPtsMap_t[cs] = argsPts;
         argsPts.clear();
         for (NodeID arg: argsBS) {
             for (NodeID o: incpta->getPts(arg)) {
@@ -664,6 +982,7 @@ void MRGenerator::updateCallSitePts(const CallICFGNode* cs)
     }
     NodeBS ret_U_retPts = retBS|retPts;
     if (hasPtsChange(ret_U_retPts)) {
+        csToCallSiteRetPtsMap_t[cs] = argsPts;
         retPts.clear();
         for (NodeID ret: retBS) {
             for (NodeID o: incpta->getPts(ret)) {
@@ -824,11 +1143,215 @@ bool MRGenerator::handleCallsiteModRef(NodeBS& mod, NodeBS& ref, const CallICFGN
 
     return refchanged || modchanged;
 }
+bool MRGenerator::delRefSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& refs, NodeBS& delRefToProp)
+{
+    if(!refs.empty())
+    {
+        NodeBS refset = refs;
+        refset &= (getCallSiteArgsPts(cs));
+        getEscapObjviaGlobals(refset,refs);
 
+        // compute fun refs diff
+        NodeBS funDelRefs;
+        delRefSideEffectOfFunction_callSite(cs->getCaller(), refset, funDelRefs);
+
+        // reset callsite refs
+        csToRefsMap[cs] = csToRefsMap[cs] - refset;
+
+        if (!funDelRefs.empty()) {
+            funToDelRefsMap[cs->getCaller()] |= funDelRefs;
+            return true;
+        }
+    }
+    return false;
+}
+bool MRGenerator::delModSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& mods, NodeBS& delModToProp)
+{
+    if(!mods.empty())
+    {
+        NodeBS modset = mods;
+        modset &= (getCallSiteArgsPts(cs) | getCallSiteRetPts(cs));
+        getEscapObjviaGlobals(modset,mods);
+
+        // compute fun mods diff
+        NodeBS funDelMods;
+        delModSideEffectOfFunction_callSite(cs->getCaller(), modset, funDelMods);
+
+        // reset callsite mods
+        csToModsMap[cs] = csToModsMap[cs] - modset;
+
+        if (!funDelMods.empty()) {
+            funToDelModsMap[cs->getCaller()] |= funDelMods;
+            return true;
+        }
+    }
+    return false;
+}
+bool MRGenerator::delGlobsArgsRetsPtsOfCallSite(const CallICFGNode* cs, const NodeBS& calleeDMods, const NodeBS& calleeDRefs)
+{
+    const SVFFunction* caller = cs->getCaller();
+    const NodeBS& oldCsArgsPts = csToCallSiteArgsPtsMap_t[cs];
+    const NodeBS& oldCsRetsPts = csToCallSiteRetPtsMap_t[cs];
+    const NodeBS& csArgsPts = csToCallSiteArgsPtsMap[cs];
+    const NodeBS& csRetsPts = csToCallSiteRetPtsMap[cs];
+    // compute dRetPts/dArgsPts
+    NodeBS dRets = oldCsRetsPts - csRetsPts;
+    NodeBS dArgs = oldCsArgsPts - csArgsPts;
+    if (dRets.empty()) {
+        csToCallSiteRetPtsMap_t.erase(cs);
+    }
+    if (dArgs.empty()) {
+        csToCallSiteArgsPtsMap_t.erase(cs);
+    }
+    // compute callsite's dRefs/dMods
+    NodeBS dRefs = dGlobs | dArgs | calleeDRefs;
+    NodeBS dMods = dGlobs | dArgs | dRets | calleeDMods;
+
+    // compute fun refs/mods diff
+    NodeBS funDelRefs;
+    NodeBS funDelMods;
+    delRefSideEffectOfFunction_callSite(caller, dRefs, funDelRefs);
+    delModSideEffectOfFunction_callSite(caller, dMods, funDelMods);
+
+    // reset callsite refs/mods
+    csToModsMap[cs] = csToModsMap[cs] - dMods;
+    csToRefsMap[cs] = csToRefsMap[cs] - dRefs;
+    bool callerRefsChanged = false;
+    bool callerModsChanged = false;
+    if (!funDelRefs.empty()) {
+        funToDelRefsMap[caller] |= funDelRefs;
+        callerRefsChanged = true;
+    }
+    if (!funDelMods.empty()) {
+        funToDelModsMap[caller] |= funDelMods;
+        callerModsChanged = true;
+    }
+    return callerRefsChanged || callerModsChanged;
+}
 /*!
  * Call site mod-ref analysis
  * Compute mod-ref of all callsites invoking this call graph node
  */
+void MRGenerator::delRefAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist)
+{
+    const SVFFunction* fun = callGraphNode->getFunction();
+    NodeBS dRef = funToDelRefsMap[fun]; // copy del ref set
+    funToDelRefsMap[fun].clear();
+    funToDelRefsMap.erase(fun);
+    if (dRef.empty())
+        return;
+    /// del ref set of callee to its invocation callsites at caller
+    for(PTACallGraphNode::iterator it = callGraphNode->InEdgeBegin(), eit = callGraphNode->InEdgeEnd();
+            it!=eit; ++it)
+    {
+        PTACallGraphEdge* edge = *it;
+
+        /// handle direct callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getDirectCalls().begin(),
+                ecit = edge->getDirectCalls().end(); cit!=ecit; ++cit)
+        {
+            NodeBS ref;
+            const CallICFGNode* cs = (*cit);
+            NodeBS delRefToProp;
+            bool changed = delRefSideEffectOfCallSite(cs, dRef, delRefToProp);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+        /// handle indirect callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getIndirectCalls().begin(),
+                ecit = edge->getIndirectCalls().end(); cit!=ecit; ++cit)
+        {
+            NodeBS ref;
+            const CallICFGNode* cs = (*cit);
+            NodeBS delRefToProp;
+            bool changed = delRefSideEffectOfCallSite(cs, dRef, delRefToProp);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+    }
+
+}
+void MRGenerator::delModAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist)
+{
+    const SVFFunction* fun = callGraphNode->getFunction();
+    NodeBS dMod = funToDelModsMap[fun]; // copy del mod set
+    funToDelModsMap[fun].clear();
+    funToDelModsMap.erase(fun);
+    if (dMod.empty())
+        return;
+
+    /// del mod set of callee to its invocation callsites at caller
+    for(PTACallGraphNode::iterator it = callGraphNode->InEdgeBegin(), eit = callGraphNode->InEdgeEnd();
+            it!=eit; ++it)
+    {
+        PTACallGraphEdge* edge = *it;
+
+        /// handle direct callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getDirectCalls().begin(),
+                ecit = edge->getDirectCalls().end(); cit!=ecit; ++cit)
+        {
+            NodeBS mod;
+            const CallICFGNode* cs = (*cit);
+            NodeBS delModToProp;
+            bool changed = delModSideEffectOfCallSite(cs, dMod, delModToProp);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+        /// handle indirect callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getIndirectCalls().begin(),
+                ecit = edge->getIndirectCalls().end(); cit!=ecit; ++cit)
+        {
+            NodeBS mod;
+            const CallICFGNode* cs = (*cit);
+            NodeBS delModToProp;
+            bool changed = delModSideEffectOfCallSite(cs, dMod, delModToProp);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+    }
+
+}
+void MRGenerator::delGlobsArgsRetsPtsAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist)
+{
+    const SVFFunction* fun = callGraphNode->getFunction();
+    NodeBS calleeDMods = funToDelModsMap[fun];
+    NodeBS calleeDRefs = funToDelRefsMap[fun];
+    funToDelModsMap[fun].clear();
+    funToDelModsMap.erase(fun);
+    funToDelRefsMap[fun].clear();
+    funToDelRefsMap.erase(fun);
+    for(PTACallGraphNode::iterator it = callGraphNode->InEdgeBegin(), eit = callGraphNode->InEdgeEnd();
+            it!=eit; ++it)
+    {
+        PTACallGraphEdge* edge = *it;
+
+        /// handle direct callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getDirectCalls().begin(),
+                ecit = edge->getDirectCalls().end(); cit!=ecit; ++cit)
+        {
+            const CallICFGNode* cs = (*cit);
+            bool changed = delGlobsArgsRetsPtsOfCallSite(cs, calleeDMods, calleeDRefs);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+        /// handle indirect callsites
+        for(PTACallGraphEdge::CallInstSet::iterator cit = edge->getIndirectCalls().begin(),
+                ecit = edge->getIndirectCalls().end(); cit!=ecit; ++cit)
+        {
+            const CallICFGNode* cs = (*cit);
+            bool changed = delGlobsArgsRetsPtsOfCallSite(cs, calleeDMods, calleeDRefs);
+            if (changed) {
+                worklist.push(edge->getSrcID());
+            }
+        }
+    }
+    
+}
 void MRGenerator::modRefAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist)
 {
 

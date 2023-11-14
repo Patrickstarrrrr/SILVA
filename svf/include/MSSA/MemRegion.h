@@ -188,7 +188,7 @@ public:
     typedef SVFIR::SVFStmtList SVFStmtList;
     /// Call Graph SCC
     typedef SCCDetection<PTACallGraph*> SCC;
-
+    typedef std::unordered_set<const SVFFunction*> FunctionSet;
     MRSet& getMRSet()
     {
         return memRegSet;
@@ -205,7 +205,12 @@ public:
     const MemRegion* getMR(const NodeBS& cpts) const;
 
 private:
-
+    FunctionSet storeChangedFunctions;
+    FunctionSet loadChangedFunctions;
+    FunctionSet mods_lsChangedFunctions;
+    FunctionSet refs_lsChangedFunctions;
+    void initChangedFunctions();
+    
     BVDataPTAImpl* pta;
     AndersenInc* incpta;
     SCC* callGraphSCC;
@@ -228,39 +233,64 @@ private:
     StoresToPointsToMap	storesToPointsToMap;
     /// Map a callsite to it refs cpts set
     CallSiteToPointsToMap callsiteToRefPointsToMap;
+    CallSiteToPointsToMap newCallsiteToRefPointsToMap;
     /// Map a callsite to it mods cpts set
     CallSiteToPointsToMap callsiteToModPointsToMap;
+    CallSiteToPointsToMap newCallsiteToModPointsToMap;
 
     /// Map a function to all of its conditional points-to sets
     FunToPointsTosMap funToPointsToMap;
+    FunToPointsTosMap newFunToPointsToMap;
+    
     /// Map a PAGEdge to its fun
     PAGEdgeToFunMap pagEdgeToFunMap;
 
     /// Map a function to its indirect uses of memory objects
-    FunToPointsToMap funToRefsMap;
+    FunToPointsToMap funToRefsMap; // funToRefs := funToRefs_ls \union funToRefs_cs
+    FunToPointsToMap funToRefsMap_t;
+
+    FunToPointsToMap funToRefsMap_ls;
+    FunToPointsToMap funToRefsMap_ls_t;
+
+    FunToPointsToMap funToRefsMap_cs;
+
+
     /// Map a function to its indirect defs of memory objects
-    FunToPointsToMap funToModsMap;
+    FunToPointsToMap funToModsMap; // funToMods := funToMods_ls \union funToMods_cs
+    FunToPointsToMap funToModsMap_t;
+
+    FunToPointsToMap funToModsMap_ls;
+    FunToPointsToMap funToModsMap_ls_t;
+
+    FunToPointsToMap funToModsMap_cs;
+
+    FunToPointsToMap funToDelModsMap;
+    FunToPointsToMap funToDelRefsMap;
+
     /// Map a callsite to its indirect uses of memory objects
     CallSiteToPointsToMap csToRefsMap;
     /// Map a callsite to its indirect defs of memory objects
     CallSiteToPointsToMap csToModsMap;
     /// Map a callsite to all its object might pass into its callees
     CallSiteToPointsToMap csToCallSiteArgsPtsMap;
+    CallSiteToPointsToMap csToCallSiteArgsPtsMap_t;
     /// Map a callsite to all its object might return from its callees
     CallSiteToPointsToMap csToCallSiteRetPtsMap;
+    CallSiteToPointsToMap csToCallSiteRetPtsMap_t;
 
     /// Map a pointer to its cached points-to chain;
     NodeToPTSSMap cachedPtsChainMap;
 
     /// All global variable SVFIR node ids
     NodeBS allGlobals;
-
+    NodeBS allGlobals_t;
+    NodeBS dGlobs;
     /// Clean up memory
     void destroy();
 
     //Get all objects might pass into callee from a callsite
     void collectCallSitePts(const CallICFGNode* cs);
-    void updateCallSitePts(const CallICFGNode* cs);
+    void collectCallSitePts_inc(const CallICFGNode* cs);
     bool hasPtsChange(NodeBS& nodes);
     //Recursive collect points-to chain
     NodeBS& CollectPtsChain(NodeID id);
@@ -301,12 +331,11 @@ protected:
 
     /// Generate regions for loads/stores
     virtual void collectModRefForLoadStore();
-    virtual void updateModRefForLoadStore();
+    void collectModRefForLoadStore_inc();
 
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
-    virtual void updateModRefForCall(); // TODO --wjy
-
+    void collectModRefForCall_inc();
     /// Partition regions
     virtual void partitionMRs();
 
@@ -347,41 +376,44 @@ protected:
 
     /// Mod-Ref analysis for callsite invoking this callGraphNode
     virtual void modRefAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist);
-
+    void delModAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist);
+    void delRefAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist);
+    void delGlobsArgsRetsPtsAnalysis(PTACallGraphNode* callGraphNode, WorkList& worklist);
     /// Get Mod-Ref of a callee function
     virtual bool handleCallsiteModRef(NodeBS& mod, NodeBS& ref, const CallICFGNode* cs, const SVFFunction* fun);
-
+    bool handleCallsiteModDel(NodeBS& mods, const CallICFGNode* cs, const SVFFunction* fun);
+    bool handleCallsiteRefDel(NodeBS& refs, const CallICFGNode* cs, const SVFFunction* fun);
 
     /// Add cpts to store/load
     //@{
-    inline void updateCPtsToStore(NodeBS& oldpts, NodeBS& newpts, NodeBS& delpts, NodeBS& inspts, 
-        const StoreStmt *st, const SVFFunction* fun)
+    inline void addCPtsToStore_inc(NodeBS& cpts, const StoreStmt *st, const SVFFunction* fun)
     {
-        storesToPointsToMap[st] = newpts;
-        funToPointsToMap[fun].erase(oldpts);
-        funToPointsToMap[fun].insert(newpts);
-        updateModSideEffectOfFunction(fun, delpts, inspts);
+        storesToPointsToMap[st] = cpts;
+        funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        addModSideEffectOfFunction_loadStore_inc(fun, cpts);
     }
     inline void addCPtsToStore(NodeBS& cpts, const StoreStmt *st, const SVFFunction* fun)
     {
         storesToPointsToMap[st] = cpts;
         funToPointsToMap[fun].insert(cpts);
-        addModSideEffectOfFunction(fun,cpts);
+        // addModSideEffectOfFunction(fun,cpts);
+        addModSideEffectOfFunction_loadStore(fun, cpts);
     }
 
-    inline void updateCPtsToLoad(NodeBS& oldpts, NodeBS& newpts, NodeBS& delpts, NodeBS& inspts, 
-        const LoadStmt *ld, const SVFFunction* fun)
+    inline void addCPtsToLoad_inc(NodeBS& cpts, const LoadStmt *ld, const SVFFunction* fun)
     {
-        loadsToPointsToMap[ld] = newpts;
-        funToPointsToMap[fun].erase(oldpts);
-        funToPointsToMap[fun].insert(newpts);
-        updateRefSideEffectOfFunction(fun, delpts, inspts);
+        loadsToPointsToMap[ld] = cpts;
+        funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        // addRefSideEffectOfFunction(fun,cpts);
+        addRefSideEffectOfFunction_loadStore_inc(fun, cpts);
     }
     inline void addCPtsToLoad(NodeBS& cpts, const LoadStmt *ld, const SVFFunction* fun)
     {
         loadsToPointsToMap[ld] = cpts;
         funToPointsToMap[fun].insert(cpts);
-        addRefSideEffectOfFunction(fun,cpts);
+        // addRefSideEffectOfFunction(fun,cpts);
+        addRefSideEffectOfFunction_loadStore(fun, cpts);
+
     }
     
     inline void addCPtsToCallSiteRefs(NodeBS& cpts, const CallICFGNode* cs)
@@ -411,15 +443,26 @@ protected:
     //@{
     /// Add indirect uses an memory object in the function
     void addRefSideEffectOfFunction(const SVFFunction* fun, const NodeBS& refs);
-    void updateRefSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods);
+    void addRefSideEffectOfFunction_loadStore(const SVFFunction* fun, const NodeBS& refs);
+    void addRefSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& refs);
+    void delRefSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& refs, NodeBS& delRefs);
+    void addRefSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& refs);
+    
     /// Add indirect def an memory object in the function
     void addModSideEffectOfFunction(const SVFFunction* fun, const NodeBS& mods);
-    void updateModSideEffectOfFunction(const SVFFunction* fun, const NodeBS& delmods, const NodeBS& insmods);
+    void addModSideEffectOfFunction_loadStore(const SVFFunction* fun, const NodeBS& mods);
+    void addModSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& mods);
+    void delModSideEffectOfFunction_callSite(const SVFFunction* fun, const NodeBS& mods, NodeBS& delMods);
+    void addModSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& mods);
+    
     /// Add indirect uses an memory object in the function
     bool addRefSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& refs);
+    bool delRefSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& refs, NodeBS& delRefToProp);
     /// Add indirect def an memory object in the function
     bool addModSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& mods);
+    bool delModSideEffectOfCallSite(const CallICFGNode* cs, const NodeBS& mods, NodeBS& delModToProp);
 
+    bool delGlobsArgsRetsPtsOfCallSite(const CallICFGNode* cs, const NodeBS& calleeDMods, const NodeBS& calleeDRefs);
     /// Get indirect refs of a function
     inline const NodeBS& getRefSideEffectOfFunction(const SVFFunction* fun)
     {

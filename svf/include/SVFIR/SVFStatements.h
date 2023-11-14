@@ -91,10 +91,12 @@ protected:
     }
 
 public:
+    bool isDeleted;
+    bool isInserted;
     static u32_t totalEdgeNum; ///< Total edge number
 
     /// Constructor
-    SVFStmt(SVFVar* s, SVFVar* d, GEdgeFlag k, bool real = true);
+    SVFStmt(SVFVar* s, SVFVar* d, GEdgeFlag k, bool real = true, bool isDel = false, bool isIns = false);
     /// Destructor
     ~SVFStmt() {}
 

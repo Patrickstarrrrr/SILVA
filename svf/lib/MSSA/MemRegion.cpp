@@ -244,6 +244,8 @@ void MRGenerator::collectModRefForLoadStore()
                 }
             }
         }
+        // copy the map_ls to map
+        funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
     }
 }
 /*!
@@ -363,15 +365,18 @@ void MRGenerator::collectModRefForLoadStore_inc()
         if (storeUnchanged && loadUnchanged)
         {
             // Do not handle unchanged function
+            // reset the funToPointsToMap of store/load unchanged function
+            funToPointsToMap[&fun].clear();
+            funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
             continue;
         }
         // handle changed function
+        funToPointsToMap_ls[&fun].clear(); // clear funToPointsToMap_ls here
         // 1. handle store changed function
         if (!storeUnchanged) {
             // 1.1 save old funToMods_ls and recompute funToMods_ls
             NodeBS oldFunToMods_ls = funToModsMap_ls[&fun];
             funToModsMap_ls[&fun].clear();
-
             // 1.2 recompute funToMods
             for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
                     iter != eiter; ++iter)
@@ -453,20 +458,31 @@ void MRGenerator::collectModRefForLoadStore_inc()
                 funToRefsMap_ls_t[&fun] = oldFunToRefs_ls;
             }
         } // end if (!loadUnchanged)
+        
+        // 3. reset the funToPointsToMap of changed function.
+        // the funToPointsToMap_ls is computed in addCPtsToStore/Load_inc
+        funToPointsToMap[&fun].clear();
+        funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
     }
 }
 
-void MRGenerator::collectModRefForCall_inc()
+void MRGenerator::incrementalModRefAnalysis()
 {
+    initChangedFunctions();
+
+    collectModRefForLoadStore_inc();
+    
     // U/D_callsite |= (N_callsite \intersection U/D_callee) \union (G \intersection U/D_callee)
     // 
-    // 1. reset and propagate del ref and del mod bottom-up ly based on old globs and argspts/retspts
+    // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
     // 2. recompute globs and get del globs
     // 3. recompute argspts/retspts and get del argspts/retspts
     // 4. reset and propagate del globs and del argspts/retspts 
-    //      bottom-up ly base on the function mod/ref set changed
+    //      from the bottom up base on the function mod/ref set changed
+    // 5. recompute mod/ref from the bottom up
 
-    // 1. reset and propagate del ref and del mod bottom-up ly based on old globs and argspts/retspts
+    // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
+    
     WorkList worklist;
     WorkList modlist;
     WorkList reflist;
@@ -523,15 +539,15 @@ void MRGenerator::collectModRefForCall_inc()
     }
     funToDelModsMap.clear();
     funToDelRefsMap.clear();
+
     // 2. recompute globs and get del globs
     allGlobals_t = allGlobals;
     allGlobals.clear();
     collectGlobals();
-
     dGlobs = allGlobals_t - allGlobals;
+
     // 3. recompute argspts/retspts and get del argspts/retspts
     cachedPtsChainMap.clear(); // clear cachedPtsChainMap
-
     for(SVFIR::CallSiteSet::const_iterator it =  pta->getPAG()->getCallSiteSet().begin(),
             eit = pta->getPAG()->getCallSiteSet().end(); it!=eit; ++it)
     {
@@ -539,7 +555,7 @@ void MRGenerator::collectModRefForCall_inc()
         collectCallSitePts_inc((*it));
     }
     // 4. reset and propagate del globs and del argspts/retspts 
-    //      bottom-up ly base on the function mod/ref set changed
+    //      from the bottom up base on the function mod/ref set changed
     getCallGraphSCCRevTopoOrder(worklist);
     while(!worklist.empty())
     {
@@ -554,7 +570,45 @@ void MRGenerator::collectModRefForCall_inc()
             delGlobsArgsRetsPtsAnalysis(subCallGraphNode, worklist);
         }
     }
+    // TODO: handle changed callsite/calledge?
+    
+    // 5.  recompute mod/ref from the bottom up
+    getCallGraphSCCRevTopoOrder(worklist);
 
+    double mrStart = stat->getClk(true);
+    while(!worklist.empty())
+    {
+        NodeID callGraphNodeID = worklist.pop();
+        /// handle all sub scc nodes of this rep node
+        const NodeBS& subNodes = callGraphSCC->subNodes(callGraphNodeID);
+        for(NodeBS::iterator it = subNodes.begin(), eit = subNodes.end(); it!=eit; ++it)
+        {
+            PTACallGraphNode* subCallGraphNode = callGraph->getCallGraphNode(*it);
+            /// Get mod-ref of all callsites calling callGraphNode
+            modRefAnalysis(subCallGraphNode,worklist);
+        }
+    }
+    double mrEnd = stat->getClk(true);
+    SVFUtil::outs() << "Mod Ref Inc: " << (mrEnd - mrStart)/TIMEINTERVAL;
+
+    // 6. addCPtsToCallSite
+    for (const CallICFGNode* callBlockNode : pta->getPAG()->getCallSiteSet())
+    {
+        if(hasRefSideEffectOfCallSite(callBlockNode))
+        {
+            NodeBS refs = getRefSideEffectOfCallSite(callBlockNode);
+            addCPtsToCallSiteRefs(refs,callBlockNode);
+        }
+        if(hasModSideEffectOfCallSite(callBlockNode))
+        {
+            NodeBS mods = getModSideEffectOfCallSite(callBlockNode);
+            /// mods are treated as both def and use of memory objects
+            addCPtsToCallSiteMods(mods,callBlockNode);
+            addCPtsToCallSiteRefs(mods,callBlockNode);
+        }
+    }
+
+    
 }
 /*!
  * Generate memory regions for calls
@@ -592,25 +646,8 @@ void MRGenerator::collectModRefForCall()
         }
     }
     double mrEnd = stat->getClk(true);
-    SVFUtil::outs() << "Mod Ref Round 1: " << (mrEnd - mrStart)/TIMEINTERVAL;
-    // round2
-    // getCallGraphSCCRevTopoOrder(worklist);
-    // double mrStart2 = stat->getClk(true);
-    // while(!worklist.empty())
-    // {
-    //     NodeID callGraphNodeID = worklist.pop();
-    //     /// handle all sub scc nodes of this rep node
-    //     const NodeBS& subNodes = callGraphSCC->subNodes(callGraphNodeID);
-    //     for(NodeBS::iterator it = subNodes.begin(), eit = subNodes.end(); it!=eit; ++it)
-    //     {
-    //         PTACallGraphNode* subCallGraphNode = callGraph->getCallGraphNode(*it);
-    //         /// Get mod-ref of all callsites calling callGraphNode
-    //         modRefAnalysis(subCallGraphNode,worklist);
-    //     }
-    // }
-    // double mrEnd2 = stat->getClk(true);
-    // // round2
-    // SVFUtil::outs() << "Mod Ref Round 2: " << (mrEnd2 - mrStart2)/TIMEINTERVAL;
+    SVFUtil::outs() << "Mod Ref: " << (mrEnd - mrStart)/TIMEINTERVAL;
+
     timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
 
     DBOUT(DGENERAL, outs() << pasMsg("\t\tAdd PointsTo to Callsites \n"));

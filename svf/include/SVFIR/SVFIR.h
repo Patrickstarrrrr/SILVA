@@ -640,44 +640,68 @@ private:
     //@{
     /// Add Address edge
     AddrStmt* addAddrStmt(NodeID src, NodeID dst);
+    SVFStmt* getAddrStmt(NodeID src, NodeID dst);
     /// Add Copy edge
     CopyStmt* addCopyStmt(NodeID src, NodeID dst);
+    SVFStmt* getCopyStmt(NodeID src, NodeID dst);
     /// Add phi node information
     PhiStmt*  addPhiStmt(NodeID res, NodeID opnd, const ICFGNode* pred);
+    SVFStmt*  getPhiStmt(NodeID res, NodeID opnd, const ICFGNode* pred);
     /// Add SelectStmt
     SelectStmt*  addSelectStmt(NodeID res, NodeID op1, NodeID op2, NodeID cond);
+    SVFStmt*  getSelectStmt(NodeID res, NodeID op1, NodeID op2, NodeID cond);
     /// Add Copy edge
     CmpStmt* addCmpStmt(NodeID op1, NodeID op2, NodeID dst, u32_t predict);
+    SVFStmt* getCmpStmt(NodeID op1, NodeID op2, NodeID dst, u32_t predict);
     /// Add Copy edge
     BinaryOPStmt* addBinaryOPStmt(NodeID op1, NodeID op2, NodeID dst,
                                   u32_t opcode);
+    SVFStmt*      getBinaryOPStmt(NodeID op1, NodeID op2, NodeID dst,
+                                  u32_t opcode);
     /// Add Unary edge
     UnaryOPStmt* addUnaryOPStmt(NodeID src, NodeID dst, u32_t opcode);
+    SVFStmt* getUnaryOPStmt(NodeID src, NodeID dst, u32_t opcode);
     /// Add BranchStmt
     BranchStmt* addBranchStmt(NodeID br, NodeID cond,
                               const BranchStmt::SuccAndCondPairVec& succs);
+    SVFStmt*    getBranchStmt(NodeID br, NodeID cond,
+                              const BranchStmt::SuccAndCondPairVec& succs);
     /// Add Load edge
     LoadStmt* addLoadStmt(NodeID src, NodeID dst);
+    SVFStmt* getLoadStmt(NodeID src, NodeID dst);
     /// Add Store edge
     StoreStmt* addStoreStmt(NodeID src, NodeID dst, const IntraICFGNode* val);
+    SVFStmt* getStoreStmt(NodeID src, NodeID dst, const IntraICFGNode* val);
     /// Add Call edge
     CallPE* addCallPE(NodeID src, NodeID dst, const CallICFGNode* cs,
+                      const FunEntryICFGNode* entry);
+    SVFStmt* getCallPE(NodeID src, NodeID dst, const CallICFGNode* cs,
                       const FunEntryICFGNode* entry);
     /// Add Return edge
     RetPE* addRetPE(NodeID src, NodeID dst, const CallICFGNode* cs,
                     const FunExitICFGNode* exit);
+    SVFStmt* getRetPE(NodeID src, NodeID dst, const CallICFGNode* cs,
+                    const FunExitICFGNode* exit);
     /// Add Gep edge
     GepStmt* addGepStmt(NodeID src, NodeID dst, const AccessPath& ap,
                         bool constGep);
+    SVFStmt* getGepStmt(NodeID src, NodeID dst, const AccessPath& ap,
+                        bool constGep);
     /// Add Offset(Gep) edge
     GepStmt* addNormalGepStmt(NodeID src, NodeID dst, const AccessPath& ap);
+    SVFStmt* getNormalGepStmt(NodeID src, NodeID dst, const AccessPath& ap);
     /// Add Variant(Gep) edge
     GepStmt* addVariantGepStmt(NodeID src, NodeID dst, const AccessPath& ap);
+    SVFStmt* getVariantGepStmt(NodeID src, NodeID dst, const AccessPath& ap);
     /// Add Thread fork edge for parameter passing
     TDForkPE* addThreadForkPE(NodeID src, NodeID dst, const CallICFGNode* cs,
                               const FunEntryICFGNode* entry);
+    SVFStmt* getThreadForkPE(NodeID src, NodeID dst, const CallICFGNode* cs,
+                              const FunEntryICFGNode* entry);
     /// Add Thread join edge for parameter passing
     TDJoinPE* addThreadJoinPE(NodeID src, NodeID dst, const CallICFGNode* cs,
+                              const FunExitICFGNode* exit);
+    SVFStmt* getThreadJoinPE(NodeID src, NodeID dst, const CallICFGNode* cs,
                               const FunExitICFGNode* exit);
     //@}
 

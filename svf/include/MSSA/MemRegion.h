@@ -240,7 +240,7 @@ private:
 
     /// Map a function to all of its conditional points-to sets
     FunToPointsTosMap funToPointsToMap;
-    FunToPointsTosMap newFunToPointsToMap;
+    FunToPointsTosMap funToPointsToMap_ls;
     
     /// Map a PAGEdge to its fun
     PAGEdgeToFunMap pagEdgeToFunMap;
@@ -335,7 +335,7 @@ protected:
 
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
-    void collectModRefForCall_inc();
+    void incrementalModRefAnalysis();
     /// Partition regions
     virtual void partitionMRs();
 
@@ -389,13 +389,15 @@ protected:
     inline void addCPtsToStore_inc(NodeBS& cpts, const StoreStmt *st, const SVFFunction* fun)
     {
         storesToPointsToMap[st] = cpts;
-        funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        // funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        funToPointsToMap_ls[fun].insert(cpts);
         addModSideEffectOfFunction_loadStore_inc(fun, cpts);
     }
     inline void addCPtsToStore(NodeBS& cpts, const StoreStmt *st, const SVFFunction* fun)
     {
         storesToPointsToMap[st] = cpts;
-        funToPointsToMap[fun].insert(cpts);
+        // funToPointsToMap[fun].insert(cpts);
+        funToPointsToMap_ls[fun].insert(cpts);
         // addModSideEffectOfFunction(fun,cpts);
         addModSideEffectOfFunction_loadStore(fun, cpts);
     }
@@ -403,17 +405,18 @@ protected:
     inline void addCPtsToLoad_inc(NodeBS& cpts, const LoadStmt *ld, const SVFFunction* fun)
     {
         loadsToPointsToMap[ld] = cpts;
-        funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        // funToPointsToMap[fun].insert(cpts); // TODO: handle funToPointsToMap -- wjy
+        funToPointsToMap_ls[fun].insert(cpts);
         // addRefSideEffectOfFunction(fun,cpts);
         addRefSideEffectOfFunction_loadStore_inc(fun, cpts);
     }
     inline void addCPtsToLoad(NodeBS& cpts, const LoadStmt *ld, const SVFFunction* fun)
     {
         loadsToPointsToMap[ld] = cpts;
-        funToPointsToMap[fun].insert(cpts);
+        // funToPointsToMap[fun].insert(cpts);
+        funToPointsToMap_ls[fun].insert(cpts);
         // addRefSideEffectOfFunction(fun,cpts);
         addRefSideEffectOfFunction_loadStore(fun, cpts);
-
     }
     
     inline void addCPtsToCallSiteRefs(NodeBS& cpts, const CallICFGNode* cs)

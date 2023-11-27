@@ -116,7 +116,7 @@ SVFStmt* SVFIR::getPhiStmt(NodeID res, NodeID opnd, const ICFGNode* pred)
     SVFVar* opNode = getGNode(opnd);
     SVFVar* resNode = getGNode(res);
     PHINodeMap::iterator it = phiNodeMap.find(resNode);
-    return (*it);
+    return (SVFStmt*) ((*it).second);
 }
 
 /*!
@@ -194,7 +194,7 @@ BinaryOPStmt* SVFIR::addBinaryOPStmt(NodeID op1, NodeID op2, NodeID dst, u32_t o
         return binaryOP;
     }
 }
-SVFStmt* SVFIR::addBinaryOPStmt(NodeID op1, NodeID op2, NodeID dst, u32_t opcode)
+SVFStmt* SVFIR::getBinaryOPStmt(NodeID op1, NodeID op2, NodeID dst, u32_t opcode)
 {
     SVFVar* op1Node = getGNode(op1);
     SVFVar* op2Node = getGNode(op2);
@@ -219,7 +219,7 @@ UnaryOPStmt* SVFIR::addUnaryOPStmt(NodeID src, NodeID dst, u32_t opcode)
         return unaryOP;
     }
 }
-UnaryOPStmt* SVFIR::addUnaryOPStmt(NodeID src, NodeID dst, u32_t opcode)
+SVFStmt* SVFIR::getUnaryOPStmt(NodeID src, NodeID dst, u32_t opcode)
 {
     SVFVar* srcNode = getGNode(src);
     SVFVar* dstNode = getGNode(dst);
@@ -291,7 +291,7 @@ StoreStmt* SVFIR::addStoreStmt(NodeID src, NodeID dst, const IntraICFGNode* curV
         return storePE;
     }
 }
-SVFStmt* SVFIR::addStoreStmt(NodeID src, NodeID dst, const IntraICFGNode* curVal)
+SVFStmt* SVFIR::getStoreStmt(NodeID src, NodeID dst, const IntraICFGNode* curVal)
 {
     SVFVar* srcNode = getGNode(src);
     SVFVar* dstNode = getGNode(dst);

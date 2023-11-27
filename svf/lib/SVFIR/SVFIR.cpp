@@ -356,7 +356,15 @@ SVFStmt* SVFIR::addBlackHoleAddrStmt(NodeID node)
     else
         return pag->addCopyStmt(pag->getNullPtr(), node);
 }
-
+SVFStmt* SVFIR::getBlackHoleAddrStmt(NodeID node)
+{
+    if(Options::HandBlackHole())
+        return pag->getAddrStmt(pag->getBlackHoleNode(), node);
+        // return pag->addAddrStmt(pag->getBlackHoleNode(), node);
+    else
+        return pag->getCopyStmt(pag->getNullPtr(), node);
+        // return pag->addCopyStmt(pag->getNullPtr(), node);
+}
 /*!
  * Add Thread fork edge for parameter passing from a spawner to its spawnees
  */

@@ -707,6 +707,7 @@ private:
 
     /// Set a pointer points-to black hole (e.g. int2ptr)
     SVFStmt* addBlackHoleAddrStmt(NodeID node);
+    SVFStmt* getBlackHoleAddrStmt(NodeID node);
 };
 
 typedef SVFIR PAG;

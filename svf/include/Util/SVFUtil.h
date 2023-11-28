@@ -679,6 +679,54 @@ template <typename... Ts>
 constexpr bool is_sequence_container_v = is_sequence_container<Ts...>::value;
 ///@}
 
+static inline void splitString(const std::string &s, std::vector<std::string> &v, const std::string &c)
+{
+    std::string::size_type pos1, pos2;
+    pos2 = s.find(c);
+    pos1 = 0;
+    while (std::string::npos != pos2)
+    {
+        v.push_back(s.substr(pos1, pos2 - pos1));
+
+        pos1 = pos2 + c.size();
+        pos2 = s.find(c, pos1);
+    }
+    if (pos1 != s.length())
+        v.push_back(s.substr(pos1));
+}
+
+static inline std::string getAbsPath(std::string dir, std::string file)
+{
+    std::vector<std::string> a;
+    std::vector<std::string> b;
+    std::string result = "";
+    dir = dir.substr(0, 1 + dir.find_last_not_of("/"));
+    splitString(dir + "/" + file, a, "/");
+
+    for(std::string item : a)
+    {
+        if(item == "." || item == "")
+            continue;
+        else if (item == "..")
+            b.pop_back();
+        else
+            b.push_back(item);
+    }
+    for(std::string item : b)
+    {
+        result += ("/" + item);
+    }
+    return result;
+}
+
+static inline std::string getRelaPath(std::string dir, std::string abspath)
+{
+    // assert(abspath.find(dir) != abspath.npos && abspath.c_str());
+    int pos = abspath.rfind(dir);
+    if (pos == abspath.npos )
+        return "";
+    return abspath.substr(pos);
+}
 
 } // End namespace SVFUtil
 

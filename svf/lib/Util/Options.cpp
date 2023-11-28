@@ -1022,4 +1022,41 @@ const Option<u32_t> Options::IncRound(
     "The rounds num",
     10
 );
+
+// parse new module or not
+const Option<bool> Options::IsNew(
+    "is-new",
+    "Parse new module or not",
+    false
+);
+
+const Option<bool> Options::relapath(
+    "relapath", 
+    "wether to use relative path in diff recognition",
+    false
+);
+
+const Option<std::string> Options::aftercpp(
+    "aftercpp", 
+    "path of after.cpp", 
+    ""
+);
+
+const Option<std::string> Options::beforecpp(
+    "beforecpp", 
+    "path of before.cpp", 
+    ""
+);
+
+const Option<std::string> Options::sourcediff(
+    "sourcediff", 
+    "path of sourcediff.txt", 
+    "");
+
+const Option<std::string> Options::diffresult(
+    "diffresult", 
+    "path of diffresult.txt",
+    ""
+);
+
 } // namespace SVF.

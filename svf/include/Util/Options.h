@@ -296,6 +296,14 @@ public:
     static const Option<u32_t> IncStep;
     static const Option<double> ChangeProportion;
     static const Option<u32_t> IncRound;
+
+    static const Option<bool> IsNew; // lry
+    /// @brief for ir diff
+    static const Option<bool> relapath;
+    static const Option<std::string> aftercpp;
+    static const Option<std::string> beforecpp;
+    static const Option<std::string> sourcediff;
+    static const Option<std::string> diffresult;
 };
 }  // namespace SVF
 

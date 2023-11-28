@@ -46,7 +46,7 @@ else()
 endif()
 
 # SVF-LLVM contains LLVM Libs
-file(GLOB SVFLLVM_SOURCES lib/*.cpp)
+file(GLOB SVFLLVM_SOURCES lib/*.cpp lib/Diff/*.cpp)
 
 add_llvm_library(SvfLLVM STATIC ${SVFLLVM_SOURCES})
 target_include_directories(SvfLLVM SYSTEM PUBLIC ${LLVM_INCLUDE_DIRS})

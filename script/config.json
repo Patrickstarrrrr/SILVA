@@ -1,0 +1,9 @@
+{
+    "ROOT":"/home/**/IS-VFA",
+    "BUILD_DIR":"Debug-build",
+    "max_hour":10,
+    "OldBenROOT":"/home/**/llvm-project-old",
+    "NewBenROOT":"/home/**/llvm-project-new",
+    "build_dir_old":"/home/**/ben-build-8fc424f26b ",
+    "build_dir_new":"/home/**/ben-build-5ad2592b5d " 
+ }

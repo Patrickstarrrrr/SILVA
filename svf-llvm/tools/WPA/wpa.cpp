@@ -32,11 +32,33 @@
 #include "Util/CommandLine.h"
 #include "Util/Options.h"
 #include "SVFIR/SVFFileSystem.h"
-
+#include "Diff/SourceDiff.h"
+#include "Diff/IRDiff.h"
 
 using namespace llvm;
 using namespace std;
 using namespace SVF;
+
+void diff()
+{
+    // double starttime = stat->getClk();   
+    SourceDiffHandler *sourceDiff = SourceDiffHandler::getSourceDiffHandler();
+
+    //std::cout << "sourceDiff.display:" << std::endl;
+    sourceDiff->handle();
+    //sourceDiff.display();
+    //sourceDiff.dump();
+    // double endtime = stat->getClk();
+    // stat->StatTimeOfSourceDiff(starttime, endtime);
+
+    // starttime = stat->getClk();
+    IRDiffHandler* irDiff = IRDiffHandler::getIRDiffHandler();
+    irDiff->parse();
+    // endtime = stat->getClk();
+    // stat->StatTimeOfIrDiff(starttime, endtime);
+
+    // irDiff->dump("irdiffresult.txt",true);
+}
 
 int main(int argc, char** argv)
 {
@@ -64,7 +86,7 @@ int main(int argc, char** argv)
         SVFIRBuilder builder(svfModule);
         pag = builder.build();
     }
-
+    diff();
     WPAPass wpa;
     wpa.runOnModule(pag);
 

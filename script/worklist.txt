@@ -1,0 +1,3 @@
+13M bin/llvm-opt-report.bc
+14M bin/llvm-rc.bc
+#1M make.bc

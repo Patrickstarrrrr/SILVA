@@ -1059,4 +1059,10 @@ const Option<std::string> Options::diffresult(
     ""
 );
 
+const Option<bool> Options::diff(
+    "diff", 
+    "wether to use diff module",
+    false
+);
+
 } // namespace SVF.

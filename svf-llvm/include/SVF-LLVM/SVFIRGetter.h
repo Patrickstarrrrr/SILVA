@@ -19,7 +19,7 @@ private:
     SVFModule* svfModule;
     const SVFBasicBlock* curBB;	///< Current basic block during SVFIR construction when visiting the module
     const SVFValue* curVal;	///< Current Value during SVFIR construction when visiting the module
-
+    std::vector<SVFStmt*> stmts;
 public:
     /// Constructor
     SVFIRGetter(SVFModule* mod): pag(SVFIR::getPAG()), svfModule(mod), curBB(nullptr),curVal(nullptr)
@@ -36,6 +36,9 @@ public:
         return pag;
     }
 
+    /// Compute offset of a gep instruction or gep constant expression
+    bool computeGepOffset(const User *V, AccessPath& ap);
+    
     /// Get different kinds of node
     //@{
     // GetValNode - Return the value node according to a LLVM Value.
@@ -154,6 +157,166 @@ public:
     }
     //}@
 
+
+    /// Handle direct call
+    void handleDirectCall(CallBase* cs, const Function *F);
+
+    /// Handle indirect call
+    void handleIndCall(CallBase* cs);
+
+    /// Handle external call
+    //@{
+    virtual const Type *getBaseTypeAndFlattenedFields(const Value *V, std::vector<AccessPath> &fields, const Value* szValue);
+    virtual void addComplexConsForExt(Value *D, Value *S, const Value* sz);
+    virtual void handleExtCall(const CallBase* cs, const SVFFunction* svfCallee);
+    //@}
+
+    /// Set current basic block in order to keep track of control flow information
+    inline void setCurrentLocation(const Value* val, const BasicBlock* bb)
+    {
+        curBB = (bb == nullptr? nullptr : LLVMModuleSet::getLLVMModuleSet()->getSVFBasicBlock(bb));
+        curVal = (val == nullptr ? nullptr: LLVMModuleSet::getLLVMModuleSet()->getSVFValue(val));
+    }
+    inline void setCurrentLocation(const SVFValue* val, const SVFBasicBlock* bb)
+    {
+        curBB = bb;
+        curVal = val;
+    }
+    inline const SVFValue* getCurrentValue() const
+    {
+        return curVal;
+    }
+    inline const SVFBasicBlock* getCurrentBB() const
+    {
+        return curBB;
+    }
+
+
+    // void setCurrentBBAndValueForPAGEdge(PAGEdge* edge);
+
+    inline void addBlackHoleAddrEdge(NodeID node)
+    {
+        if(SVFStmt *edge = pag->getBlackHoleAddrStmt(node))
+            stmts.push_back(edge);
+    }
+
+    /// Add Address edge
+    inline void addAddrEdge(NodeID src, NodeID dst)
+    {
+        if(SVFStmt *edge = pag->getAddrStmt(src, dst))
+        {
+            stmts.push_back(edge);
+        }
+    }
+    /// Add Copy edge
+    inline void addCopyEdge(NodeID src, NodeID dst)
+    {
+        if(SVFStmt *edge = pag->getCopyStmt(src, dst))
+        {
+            stmts.push_back(edge);
+        }
+    }
+    /// Add Copy edge
+    inline void addPhiStmt(NodeID res, NodeID opnd, const ICFGNode* pred)
+    {
+        /// If we already added this phi node, then skip this adding
+        if(SVFStmt *edge = pag->getPhiStmt(res,opnd,pred)) {
+            stmts.push_back(edge);
+        }
+    }
+    /// Add SelectStmt
+    inline void addSelectStmt(NodeID res, NodeID op1, NodeID op2, NodeID cond)
+    {
+        if(SVFStmt *edge = pag->getSelectStmt(res,op1,op2,cond)) {
+            stmts.push_back(edge);
+        }
+    }
+    /// Add Copy edge
+    inline void addCmpEdge(NodeID op1, NodeID op2, NodeID dst, u32_t predict)
+    {
+        if(SVFStmt *edge = pag->getCmpStmt(op1, op2, dst, predict))
+            stmts.push_back(edge);
+    }
+    /// Add Copy edge
+    inline void addBinaryOPEdge(NodeID op1, NodeID op2, NodeID dst, u32_t opcode)
+    {
+        if(SVFStmt *edge = pag->getBinaryOPStmt(op1, op2, dst, opcode))
+            stmts.push_back(edge);
+    }
+    /// Add Unary edge
+    inline void addUnaryOPEdge(NodeID src, NodeID dst, u32_t opcode)
+    {
+        if(SVFStmt *edge = pag->getUnaryOPStmt(src, dst, opcode))
+            stmts.push_back(edge);
+    }
+    /// Add Branch statement
+    inline void addBranchStmt(NodeID br, NodeID cond, const BranchStmt::SuccAndCondPairVec& succs)
+    {
+        if(SVFStmt *edge = pag->getBranchStmt(br, cond, succs))
+            stmts.push_back(edge);
+    }
+    /// Add Load edge
+    inline void addLoadEdge(NodeID src, NodeID dst)
+    {
+        if(SVFStmt *edge = pag->getLoadStmt(src, dst))
+            stmts.push_back(edge);
+    }
+    /// Add Store edge
+    inline void addStoreEdge(NodeID src, NodeID dst)
+    {
+        IntraICFGNode* node;
+        if (const SVFInstruction* inst = SVFUtil::dyn_cast<SVFInstruction>(curVal))
+            node = pag->getICFG()->getIntraICFGNode(inst);
+        else
+            node = nullptr;
+        if (SVFStmt* edge = pag->getStoreStmt(src, dst, node))
+            stmts.push_back(edge);
+    }
+    /// Add Call edge
+    inline void addCallEdge(NodeID src, NodeID dst, const CallICFGNode* cs, const FunEntryICFGNode* entry)
+    {
+        if (SVFStmt* edge = pag->getCallPE(src, dst, cs, entry))
+            stmts.push_back(edge);
+    }
+    /// Add Return edge
+    inline void addRetEdge(NodeID src, NodeID dst, const CallICFGNode* cs, const FunExitICFGNode* exit)
+    {
+        if (SVFStmt* edge = pag->getRetPE(src, dst, cs, exit))
+            stmts.push_back(edge);
+    }
+    /// Add Gep edge
+    inline void addGepEdge(NodeID src, NodeID dst, const AccessPath& ap, bool constGep)
+    {
+        if (SVFStmt* edge = pag->getGepStmt(src, dst, ap, constGep))
+            stmts.push_back(edge);
+    }
+    /// Add Offset(Gep) edge
+    inline void addNormalGepEdge(NodeID src, NodeID dst, const AccessPath& ap)
+    {
+        if (SVFStmt* edge = pag->getNormalGepStmt(src, dst, ap))
+            stmts.push_back(edge);
+    }
+    /// Add Variant(Gep) edge
+    inline void addVariantGepEdge(NodeID src, NodeID dst, const AccessPath& ap)
+    {
+        if (SVFStmt* edge = pag->getVariantGepStmt(src, dst, ap))
+            stmts.push_back(edge);
+    }
+    /// Add Thread fork edge for parameter passing
+    inline void addThreadForkEdge(NodeID src, NodeID dst, const CallICFGNode* cs, const FunEntryICFGNode* entry)
+    {
+        if (SVFStmt* edge = pag->getThreadForkPE(src, dst, cs, entry))
+            stmts.push_back(edge);
+    }
+    /// Add Thread join edge for parameter passing
+    inline void addThreadJoinEdge(NodeID src, NodeID dst, const CallICFGNode* cs, const FunExitICFGNode* exit)
+    {
+        if (SVFStmt* edge = pag->getThreadJoinPE(src, dst, cs, exit))
+            stmts.push_back(edge);
+    }
+    //@}
+
+    AccessPath getAccessPathFromBaseNode(NodeID nodeId);
 };
 
 

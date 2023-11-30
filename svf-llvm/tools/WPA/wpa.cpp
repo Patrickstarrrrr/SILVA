@@ -86,7 +86,8 @@ int main(int argc, char** argv)
         SVFIRBuilder builder(svfModule);
         pag = builder.build();
     }
-    diff();
+    if (Options::diff())
+        diff();
     WPAPass wpa;
     wpa.runOnModule(pag);
 

@@ -274,3 +274,276 @@ void SVFIRGetter::visitSelectInst(SelectInst &inst)
     /// Two operands have same incoming basic block, both are the current BB
     addSelectStmt(dst,src1,src2, cond);
 }
+
+void SVFIRGetter::visitCallInst(CallInst &i)
+{
+    visitCallSite(&i);
+}
+
+void SVFIRGetter::visitInvokeInst(InvokeInst &i)
+{
+    visitCallSite(&i);
+}
+
+void SVFIRGetter::visitCallBrInst(CallBrInst &i)
+{
+    visitCallSite(&i);
+}
+
+/*
+ * Visit callsites
+ */
+void SVFIRGetter::visitCallSite(CallBase* cs)
+{
+
+    // skip llvm intrinsics
+    if(isIntrinsicInst(cs))
+        return;
+
+    const SVFInstruction* svfcall = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(cs);
+
+    DBOUT(DPAGBuild,
+          outs() << "process callsite " << svfcall->toString() << "\n");
+
+    // TODO: Mark diff callsite here? -- wjy
+    // CallICFGNode* callBlockNode = pag->getICFG()->getCallICFGNode(svfcall);
+    // RetICFGNode* retBlockNode = pag->getICFG()->getRetICFGNode(svfcall);
+
+    // pag->addCallSite(callBlockNode);
+
+    // /// Collect callsite arguments and returns
+    // for (u32_t i = 0; i < cs->arg_size(); i++)
+    //     pag->addCallSiteArgs(callBlockNode,pag->getGNode(getValueNode(cs->getArgOperand(i))));
+
+    // if(!cs->getType()->isVoidTy())
+    //     pag->addCallSiteRets(retBlockNode,pag->getGNode(getValueNode(cs)));
+
+    if (const Function *callee = LLVMUtil::getCallee(cs))
+    {
+        callee = LLVMUtil::getDefFunForMultipleModule(callee);
+        const SVFFunction* svfcallee = LLVMModuleSet::getLLVMModuleSet()->getSVFFunction(callee);
+        if (isExtCall(svfcallee))
+        {
+            // handleExtCall(cs, svfcallee); todo: handleextcall_inc
+        }
+        else
+        {
+            handleDirectCall(cs, callee);
+        }
+    }
+    else
+    {
+        //If the callee was not identified as a function (null F), this is indirect.
+        handleIndCall(cs);
+    }
+}
+
+/*!
+ * Visit return instructions of a function
+ */
+void SVFIRGetter::visitReturnInst(ReturnInst &inst)
+{
+
+    // ReturnInst itself should always not be a pointer type
+    assert(!SVFUtil::isa<PointerType>(inst.getType()));
+
+    DBOUT(DPAGBuild, outs() << "process return  " << LLVMModuleSet::getLLVMModuleSet()->getSVFValue(&inst)->toString() << " \n");
+
+    if(Value* src = inst.getReturnValue())
+    {
+        const SVFFunction *F = LLVMModuleSet::getLLVMModuleSet()->getSVFFunction(inst.getParent()->getParent());
+
+        NodeID rnF = getReturnNode(F);
+        NodeID vnS = getValueNode(src);
+        const SVFInstruction* svfInst = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(&inst);
+        const ICFGNode* icfgNode = pag->getICFG()->getICFGNode(svfInst);
+        //vnS may be null if src is a null ptr
+        addPhiStmt(rnF,vnS,icfgNode);
+    }
+}
+
+/*!
+ * visit extract value instructions for structures in registers
+ * TODO: for now we just assume the pointer after extraction points to blackhole
+ * for example %24 = extractvalue { i32, %struct.s_hash* } %call34, 0
+ * %24 is a pointer points to first field of a register value %call34
+ * however we can not create %call34 as an memory object, as it is register value.
+ * Is that necessary treat extract value as getelementptr instruction later to get more precise results?
+ */
+void SVFIRGetter::visitExtractValueInst(ExtractValueInst  &inst)
+{
+    NodeID dst = getValueNode(&inst);
+    addBlackHoleAddrEdge(dst);
+}
+
+/*!
+ * The �extractelement� instruction extracts a single scalar element from a vector at a specified index.
+ * TODO: for now we just assume the pointer after extraction points to blackhole
+ * The first operand of an �extractelement� instruction is a value of vector type.
+ * The second operand is an index indicating the position from which to extract the element.
+ *
+ * <result> = extractelement <4 x i32> %vec, i32 0    ; yields i32
+ */
+void SVFIRGetter::visitExtractElementInst(ExtractElementInst &inst)
+{
+    NodeID dst = getValueNode(&inst);
+    addBlackHoleAddrEdge(dst);
+}
+
+/*!
+ * Branch and switch instructions are treated as UnaryOP
+ * br %cmp label %if.then, label %if.else
+ */
+void SVFIRGetter::visitBranchInst(BranchInst &inst)
+{
+    NodeID brinst = getValueNode(&inst);
+    NodeID cond;
+    if (inst.isConditional())
+        cond = getValueNode(inst.getCondition());
+    else
+        cond = pag->getNullPtr();
+
+    assert(inst.getNumSuccessors() <= 2 && "if/else has more than two branches?");
+
+    BranchStmt::SuccAndCondPairVec successors;
+    for (u32_t i = 0; i < inst.getNumSuccessors(); ++i)
+    {
+        const Instruction* succInst = &inst.getSuccessor(i)->front();
+        const SVFInstruction* svfSuccInst = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(succInst);
+        const ICFGNode* icfgNode = pag->getICFG()->getICFGNode(svfSuccInst);
+        successors.push_back(std::make_pair(icfgNode, 1-i));
+    }
+    addBranchStmt(brinst, cond,successors);
+}
+
+void SVFIRGetter::visitSwitchInst(SwitchInst &inst)
+{
+    NodeID brinst = getValueNode(&inst);
+    NodeID cond = getValueNode(inst.getCondition());
+
+    BranchStmt::SuccAndCondPairVec successors;
+
+    // get case successor basic block and related case value
+    SuccBBAndCondValPairVec succBB2CondValPairVec;
+    LLVMUtil::getSuccBBandCondValPairVec(inst, succBB2CondValPairVec);
+    for (auto &succBB2CaseValue : succBB2CondValPairVec)
+    {
+        s64_t val = LLVMUtil::getCaseValue(inst, succBB2CaseValue);
+        const BasicBlock *succBB = succBB2CaseValue.first;
+        const Instruction* succInst = &succBB->front();
+        const SVFInstruction* svfSuccInst = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(succInst);
+        const ICFGNode* icfgNode = pag->getICFG()->getICFGNode(svfSuccInst);
+        successors.push_back(std::make_pair(icfgNode, val));
+    }
+    addBranchStmt(brinst, cond, successors);
+}
+
+///   %ap = alloca %struct.va_list
+///  %ap2 = bitcast %struct.va_list* %ap to i8*
+/// ; Read a single integer argument from %ap2
+/// %tmp = va_arg i8* %ap2, i32 (VAArgInst)
+/// TODO: for now, create a copy edge from %ap2 to %tmp, we assume here %tmp should point to the n-th argument of the var_args
+void SVFIRGetter::visitVAArgInst(VAArgInst &inst)
+{
+    NodeID dst = getValueNode(&inst);
+    Value* opnd = inst.getPointerOperand();
+    NodeID src = getValueNode(opnd);
+    addCopyEdge(src,dst);
+}
+
+/// <result> = freeze ty <val>
+/// If <val> is undef or poison, ‘freeze’ returns an arbitrary, but fixed value of type `ty`
+/// Otherwise, this instruction is a no-op and returns the input <val>
+/// For now, we assume <val> is never a poison or undef.
+void SVFIRGetter::visitFreezeInst(FreezeInst &inst)
+{
+    NodeID dst = getValueNode(&inst);
+    for (u32_t i = 0; i < inst.getNumOperands(); i++)
+    {
+        Value* opnd = inst.getOperand(i);
+        NodeID src = getValueNode(opnd);
+        addCopyEdge(src,dst);
+    }
+}
+
+/*!
+ * Add the constraints for a direct, non-external call.
+ */
+void SVFIRGetter::handleDirectCall(CallBase* cs, const Function *F)
+{
+
+    assert(F);
+    const SVFInstruction* svfcall = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(cs);
+    const SVFFunction* svffun = LLVMModuleSet::getLLVMModuleSet()->getSVFFunction(F);
+    DBOUT(DPAGBuild,
+          outs() << "handle direct call " << svfcall->toString() << " callee " << F->getName().str() << "\n");
+
+    //Only handle the ret.val. if it's used as a ptr.
+    NodeID dstrec = getValueNode(cs);
+    //Does it actually return a ptr?
+    if (!cs->getType()->isVoidTy())
+    {
+        NodeID srcret = getReturnNode(svffun);
+        CallICFGNode* callICFGNode = pag->getICFG()->getCallICFGNode(svfcall);
+        FunExitICFGNode* exitICFGNode = pag->getICFG()->getFunExitICFGNode(svffun);
+        addRetEdge(srcret, dstrec,callICFGNode, exitICFGNode);
+    }
+    //Iterators for the actual and formal parameters
+    u32_t itA = 0, ieA = cs->arg_size();
+    Function::const_arg_iterator itF = F->arg_begin(), ieF = F->arg_end();
+    //Go through the fixed parameters.
+    DBOUT(DPAGBuild, outs() << "      args:");
+    for (; itF != ieF; ++itA, ++itF)
+    {
+        //Some programs (e.g. Linux kernel) leave unneeded parameters empty.
+        if (itA == ieA)
+        {
+            DBOUT(DPAGBuild, outs() << " !! not enough args\n");
+            break;
+        }
+        const Value* AA = cs->getArgOperand(itA), *FA = &*itF; //current actual/formal arg
+
+        DBOUT(DPAGBuild, outs() << "process actual parm  " << LLVMModuleSet::getLLVMModuleSet()->getSVFValue(AA)->toString() << " \n");
+
+        NodeID dstFA = getValueNode(FA);
+        NodeID srcAA = getValueNode(AA);
+        CallICFGNode* icfgNode = pag->getICFG()->getCallICFGNode(svfcall);
+        FunEntryICFGNode* entry = pag->getICFG()->getFunEntryICFGNode(svffun);
+        addCallEdge(srcAA, dstFA, icfgNode, entry);
+    }
+    //Any remaining actual args must be varargs.
+    if (F->isVarArg())
+    {
+        NodeID vaF = getVarargNode(svffun);
+        DBOUT(DPAGBuild, outs() << "\n      varargs:");
+        for (; itA != ieA; ++itA)
+        {
+            const Value* AA = cs->getArgOperand(itA);
+            NodeID vnAA = getValueNode(AA);
+            CallICFGNode* icfgNode = pag->getICFG()->getCallICFGNode(svfcall);
+            FunEntryICFGNode* entry = pag->getICFG()->getFunEntryICFGNode(svffun);
+            addCallEdge(vnAA,vaF, icfgNode,entry);
+        }
+    }
+    if(itA != ieA)
+    {
+        /// FIXME: this assertion should be placed for correct checking except
+        /// bug program like 188.ammp, 300.twolf
+        writeWrnMsg("too many args to non-vararg func.");
+        writeWrnMsg("(" + svfcall->getSourceLoc() + ")");
+
+    }
+}
+
+/*!
+ * Indirect call is resolved on-the-fly during pointer analysis
+ */
+void SVFIRGetter::handleIndCall(CallBase* cs)
+{
+    // const SVFInstruction* svfcall = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(cs);
+    // const SVFValue* svfcalledval = LLVMModuleSet::getLLVMModuleSet()->getSVFValue(cs->getCalledOperand());
+
+    // const CallICFGNode* cbn = pag->getICFG()->getCallICFGNode(svfcall);
+    // pag->addIndirectCallsites(cbn,pag->getValueNode(svfcalledval));
+    // TODO: Mark diff callsite here? -- wjy
+}

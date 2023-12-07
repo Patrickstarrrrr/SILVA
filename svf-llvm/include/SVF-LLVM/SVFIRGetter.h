@@ -6,6 +6,7 @@
 #include "SVF-LLVM/ICFGBuilder.h"
 #include "SVF-LLVM/LLVMModule.h"
 #include "SVF-LLVM/LLVMUtil.h"
+#include "Diff/IRDiff.h"
 
 namespace SVF
 {
@@ -14,13 +15,43 @@ class SVFModule;
 
 class SVFIRGetter: public llvm::InstVisitor<SVFIRGetter>
 {
+public:
+    typedef std::vector<const SVFStmt*> StmtVec;
+    typedef std::vector<const CallICFGNode*> CallsiteVec;
+    typedef std::set<const Instruction*> InstructionSet;
 private:
     SVFIR* pag;
     SVFModule* svfModule;
     const SVFBasicBlock* curBB;	///< Current basic block during SVFIR construction when visiting the module
     const SVFValue* curVal;	///< Current Value during SVFIR construction when visiting the module
-    std::vector<SVFStmt*> stmts;
+    StmtVec stmts;
+    CallsiteVec direCallsites;
+    CallsiteVec indireCallsites;
+    static std::unique_ptr<SVFIRGetter> irGetter;
+    // InstructionSet diffInst;
 public:
+    
+    static inline SVFIRGetter* getSVFIRGetter()
+    {
+        if (irGetter == nullptr)
+        {
+            irGetter = std::unique_ptr<SVFIRGetter>(new SVFIRGetter(SVFIR::getPAG()->getModule()));
+            IRDiffHandler* irDiff = IRDiffHandler::getIRDiffHandler();
+            if (Options::IsNew()) {
+                InstructionSet& insts = irDiff->getInstAddSet();
+                for (auto inst: insts) {
+                    irGetter->visit(*const_cast<Instruction*>(inst));
+                }
+            }
+            else {
+                InstructionSet& insts = irDiff->getInstDeleteSet();
+                for (auto inst: insts) {
+                    irGetter->visit(*const_cast<Instruction*>(inst));
+                }
+            }
+        }
+        return irGetter.get();
+    }
     /// Constructor
     SVFIRGetter(SVFModule* mod): pag(SVFIR::getPAG()), svfModule(mod), curBB(nullptr),curVal(nullptr)
     {
@@ -29,7 +60,18 @@ public:
     virtual ~SVFIRGetter()
     {
     }
-
+    StmtVec& getDiffStmts()
+    {
+        return stmts;
+    }
+    CallsiteVec& getDirectCallsites()
+    {
+        return direCallsites;
+    }
+    CallsiteVec& getIndirectCallsites()
+    {
+        return indireCallsites;
+    }
     /// Return SVFIR
     SVFIR* getPAG() const
     {
@@ -191,7 +233,7 @@ public:
         return curBB;
     }
 
-
+    NodeID getGepValVar(const Value* val, const AccessPath& ap, const SVFType* elementType);
     // void setCurrentBBAndValueForPAGEdge(PAGEdge* edge);
 
     inline void addBlackHoleAddrEdge(NodeID node)

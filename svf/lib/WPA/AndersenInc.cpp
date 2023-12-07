@@ -162,325 +162,327 @@ void AndersenInc::analyze()
     SVFUtil::outs() << "Time of Exhaustive PTA: " << timeOfExhaustivePTA << "\n";
     DBOUT(DGENERAL, outs() << SVFUtil::pasMsg("Finish Solving Constraints\n"));
 
-    initAllPDM();
-    u32_t sr, spr, step;
-    // }
-    double changep = Options::ChangeProportion();
-    if (changep != 0)
-        changeProportionInc();
-    else {
-        step = Options::IncStep();
-        u32_t stepCount = 0;
-        incRound = 0;
-        if (Options::IncAddr()) {
-            sr = Options::AddrStartingRound();
-            spr = Options::AddrSpecificRound();
-            int addrcount = 0;
-            SVFStmt::SVFStmtSetTy& addrs = pag->getPTASVFStmtSet(SVFStmt::Addr);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = addrs.begin(), eiter =
-                        addrs.end(); iter != eiter; ++iter)
-            {
-                addrcount++;
-                if (addrcount < sr)
-                    continue; 
-                if (spr != 0 && spr != addrcount)
-                    continue;
-                stepCount++;
-                const AddrStmt* edge = SVFUtil::cast<AddrStmt>(*iter);
-                // addAddrFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FAddr, addrcount);
-            }
-        }
-
-        if (Options::IncCopy()) {
-            sr = Options::CopyStartingRound();
-            spr = Options::CopySpecificRound();
-            int copycount = 0;
-            SVFStmt::SVFStmtSetTy& copys = pag->getPTASVFStmtSet(SVFStmt::Copy);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = copys.begin(), eiter =
-                        copys.end(); iter != eiter; ++iter)
-            {
-                copycount++;
-                if (copycount < sr)
-                    continue; 
-                if (spr != 0 && spr != copycount)
-                    continue;
-                stepCount++;
-                const CopyStmt* edge = SVFUtil::cast<CopyStmt>(*iter);
-                // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-            }
-
-            SVFStmt::SVFStmtSetTy& phis = pag->getPTASVFStmtSet(SVFStmt::Phi);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = phis.begin(), eiter =
-                        phis.end(); iter != eiter; ++iter)
-            {
-                const PhiStmt* edge = SVFUtil::cast<PhiStmt>(*iter);
-                for(const auto opVar : edge->getOpndVars()) {
-                    // addCopyFCGEdge(opVar->getId(),edge->getResID());
-                    copycount++;
-                    if (copycount < sr)
+    if (!Options::diff()) {
+        initAllPDM();
+        u32_t sr, spr, step;
+        // }
+        double changep = Options::ChangeProportion();
+        if (changep != 0)
+            changeProportionInc();
+        else {
+            step = Options::IncStep();
+            u32_t stepCount = 0;
+            incRound = 0;
+            if (Options::IncAddr()) {
+                sr = Options::AddrStartingRound();
+                spr = Options::AddrSpecificRound();
+                int addrcount = 0;
+                SVFStmt::SVFStmtSetTy& addrs = pag->getPTASVFStmtSet(SVFStmt::Addr);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = addrs.begin(), eiter =
+                            addrs.end(); iter != eiter; ++iter)
+                {
+                    addrcount++;
+                    if (addrcount < sr)
                         continue; 
-                    if (spr != 0 && spr != copycount)
+                    if (spr != 0 && spr != addrcount)
                         continue;
                     stepCount++;
-                    NodeID src = opVar->getId();
-                    NodeID dst = edge->getResID();
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                    if (stepCount == step) {
-                        stepCount = 0;
-                        incRound++;
-                        stepIncremental();
-                    }
-                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-                }
-            }
-
-            SVFStmt::SVFStmtSetTy& selects = pag->getPTASVFStmtSet(SVFStmt::Select);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = selects.begin(), eiter =
-                        selects.end(); iter != eiter; ++iter)
-            {
-                const SelectStmt* edge = SVFUtil::cast<SelectStmt>(*iter);
-                for(const auto opVar : edge->getOpndVars()) {
-                    // addCopyFCGEdge(opVar->getId(),edge->getResID());
-                    copycount++;
-                    if (copycount < sr)
-                        continue; 
-                    if (spr != 0 && spr != copycount)
-                        continue;
-                    stepCount++;
-                    NodeID src = opVar->getId();
-                    NodeID dst = edge->getResID();
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                    if (stepCount == step) {
-                        stepCount = 0;
-                        incRound++;
-                        stepIncremental();
-                    }
-                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-                }
-            }
-
-            SVFStmt::SVFStmtSetTy& calls = pag->getPTASVFStmtSet(SVFStmt::Call);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = calls.begin(), eiter =
-                        calls.end(); iter != eiter; ++iter)
-            {
-                copycount++;
-                if (copycount < sr)
-                    continue; 
-                if (spr != 0 && spr != copycount)
-                    continue;
-                stepCount++;
-                const CallPE* edge = SVFUtil::cast<CallPE>(*iter);
-                // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-            }
-
-            SVFStmt::SVFStmtSetTy& rets = pag->getPTASVFStmtSet(SVFStmt::Ret);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = rets.begin(), eiter =
-                        rets.end(); iter != eiter; ++iter)
-            {
-                copycount++;
-                if (copycount < sr)
-                    continue; 
-                if (spr != 0 && spr != copycount)
-                    continue;
-                stepCount++;
-                const RetPE* edge = SVFUtil::cast<RetPE>(*iter);
-                // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-            }
-
-            SVFStmt::SVFStmtSetTy& tdfks = pag->getPTASVFStmtSet(SVFStmt::ThreadFork);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = tdfks.begin(), eiter =
-                        tdfks.end(); iter != eiter; ++iter)
-            {
-                copycount++;
-                if (copycount < sr)
-                    continue; 
-                if (spr != 0 && spr != copycount)
-                    continue;
-                stepCount++;
-                const TDForkPE* edge = SVFUtil::cast<TDForkPE>(*iter);
-                // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-            }
-
-            SVFStmt::SVFStmtSetTy& tdjns = pag->getPTASVFStmtSet(SVFStmt::ThreadJoin);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = tdjns.begin(), eiter =
-                        tdjns.end(); iter != eiter; ++iter)
-            {
-                copycount++;
-                if (copycount < sr)
-                    continue; 
-                if (spr != 0 && spr != copycount)
-                    continue;
-                stepCount++;
-                const TDJoinPE* edge = SVFUtil::cast<TDJoinPE>(*iter);
-                // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
-                }
-                // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
-            }
-        }
-
-        if (Options::IncVGep()) { // TODO: NGep
-            u32_t vsr = Options::VGepStartingRound();
-            u32_t vspr = Options::VGepSpecificRound();
-            u32_t nsr = Options::NGepStartingRound();
-            u32_t nspr = Options::NGepSpecificRound();
-            int gepcount = 0;
-            int vgepcount = 0;
-            int ngepcount = 0;
-            SVFStmt::SVFStmtSetTy& ngeps = pag->getPTASVFStmtSet(SVFStmt::Gep);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = ngeps.begin(), eiter =
-                        ngeps.end(); iter != eiter; ++iter)
-            {
-                gepcount++;
-                GepStmt* edge = SVFUtil::cast<GepStmt>(*iter);
-                if(edge->isVariantFieldGep()) {
-                    stepCount++;
-                    vgepcount++;
-                    if (vgepcount < vsr)
-                        continue; 
-                    if (vspr != 0 && vspr != vgepcount)
-                        continue;
-                    // addVariantGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    const AddrStmt* edge = SVFUtil::cast<AddrStmt>(*iter);
+                    // addAddrFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
                     NodeID src = edge->getRHSVarID();
                     NodeID dst = edge->getLHSVarID();
-                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
-                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
+                    delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
+                    insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FAddr));
                     if (stepCount == step) {
                         stepCount = 0;
                         incRound++;
                         stepIncremental();
                     }
-                    // singleIncremental(src, dst, FConstraintEdge::FVariantGep, gepcount);
-                }
-                else {
-                    ngepcount++;
-                    // if (ngepcount < nsr)
-                    //     continue; 
-                    // if (nspr != 0 && nspr != ngepcount)
-                    //     continue;
-                    // addNormalGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID(),edge->getAccessPath());
+                    // singleIncremental(src, dst, FConstraintEdge::FAddr, addrcount);
                 }
             }
-        }
 
-        if (Options::IncStore()) {
-            sr = Options::StoreStartingRound();
-            spr = Options::StoreSpecificRound();
-            int storecount = 0;
-            SVFStmt::SVFStmtSetTy& stores = pag->getPTASVFStmtSet(SVFStmt::Store);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = stores.begin(), eiter =
-                        stores.end(); iter != eiter; ++iter)
-            {
-                storecount ++;
-                if (storecount < sr)
-                    continue; 
-                if (spr != 0 && spr != storecount)
-                    continue;
-                stepCount++;
-                StoreStmt* edge = SVFUtil::cast<StoreStmt>(*iter);
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
+            if (Options::IncCopy()) {
+                sr = Options::CopyStartingRound();
+                spr = Options::CopySpecificRound();
+                int copycount = 0;
+                SVFStmt::SVFStmtSetTy& copys = pag->getPTASVFStmtSet(SVFStmt::Copy);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = copys.begin(), eiter =
+                            copys.end(); iter != eiter; ++iter)
+                {
+                    copycount++;
+                    if (copycount < sr)
+                        continue; 
+                    if (spr != 0 && spr != copycount)
+                        continue;
+                    stepCount++;
+                    const CopyStmt* edge = SVFUtil::cast<CopyStmt>(*iter);
+                    // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
                 }
-                // singleIncremental(src, dst, FConstraintEdge::FStore, storecount);
-            }
-        }
 
-        if (Options::IncLoad()) {
-            sr = Options::LoadStartingRound();
-            spr = Options::LoadSpecificRound();
-            int loadcount = 0;
-            SVFStmt::SVFStmtSetTy& loads = pag->getPTASVFStmtSet(SVFStmt::Load);
-            for (SVFStmt::SVFStmtSetTy::iterator iter = loads.begin(), eiter =
-                        loads.end(); iter != eiter; ++iter)
-            {
-                loadcount ++;
-                if (loadcount < sr)
-                    continue; 
-                if (spr != 0 && spr != loadcount)
-                    continue;
-                stepCount++;
-                LoadStmt* edge = SVFUtil::cast<LoadStmt>(*iter);
-                NodeID src = edge->getRHSVarID();
-                NodeID dst = edge->getLHSVarID();
-                delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
-                insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
-                if (stepCount == step) {
-                    stepCount = 0;
-                    incRound++;
-                    stepIncremental();
+                SVFStmt::SVFStmtSetTy& phis = pag->getPTASVFStmtSet(SVFStmt::Phi);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = phis.begin(), eiter =
+                            phis.end(); iter != eiter; ++iter)
+                {
+                    const PhiStmt* edge = SVFUtil::cast<PhiStmt>(*iter);
+                    for(const auto opVar : edge->getOpndVars()) {
+                        // addCopyFCGEdge(opVar->getId(),edge->getResID());
+                        copycount++;
+                        if (copycount < sr)
+                            continue; 
+                        if (spr != 0 && spr != copycount)
+                            continue;
+                        stepCount++;
+                        NodeID src = opVar->getId();
+                        NodeID dst = edge->getResID();
+                        delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                        insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                        if (stepCount == step) {
+                            stepCount = 0;
+                            incRound++;
+                            stepIncremental();
+                        }
+                        // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                    }
                 }
-                // singleIncremental(src, dst, FConstraintEdge::FLoad, loadcount);
+
+                SVFStmt::SVFStmtSetTy& selects = pag->getPTASVFStmtSet(SVFStmt::Select);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = selects.begin(), eiter =
+                            selects.end(); iter != eiter; ++iter)
+                {
+                    const SelectStmt* edge = SVFUtil::cast<SelectStmt>(*iter);
+                    for(const auto opVar : edge->getOpndVars()) {
+                        // addCopyFCGEdge(opVar->getId(),edge->getResID());
+                        copycount++;
+                        if (copycount < sr)
+                            continue; 
+                        if (spr != 0 && spr != copycount)
+                            continue;
+                        stepCount++;
+                        NodeID src = opVar->getId();
+                        NodeID dst = edge->getResID();
+                        delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                        insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                        if (stepCount == step) {
+                            stepCount = 0;
+                            incRound++;
+                            stepIncremental();
+                        }
+                        // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                    }
+                }
+
+                SVFStmt::SVFStmtSetTy& calls = pag->getPTASVFStmtSet(SVFStmt::Call);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = calls.begin(), eiter =
+                            calls.end(); iter != eiter; ++iter)
+                {
+                    copycount++;
+                    if (copycount < sr)
+                        continue; 
+                    if (spr != 0 && spr != copycount)
+                        continue;
+                    stepCount++;
+                    const CallPE* edge = SVFUtil::cast<CallPE>(*iter);
+                    // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                }
+
+                SVFStmt::SVFStmtSetTy& rets = pag->getPTASVFStmtSet(SVFStmt::Ret);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = rets.begin(), eiter =
+                            rets.end(); iter != eiter; ++iter)
+                {
+                    copycount++;
+                    if (copycount < sr)
+                        continue; 
+                    if (spr != 0 && spr != copycount)
+                        continue;
+                    stepCount++;
+                    const RetPE* edge = SVFUtil::cast<RetPE>(*iter);
+                    // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                }
+
+                SVFStmt::SVFStmtSetTy& tdfks = pag->getPTASVFStmtSet(SVFStmt::ThreadFork);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = tdfks.begin(), eiter =
+                            tdfks.end(); iter != eiter; ++iter)
+                {
+                    copycount++;
+                    if (copycount < sr)
+                        continue; 
+                    if (spr != 0 && spr != copycount)
+                        continue;
+                    stepCount++;
+                    const TDForkPE* edge = SVFUtil::cast<TDForkPE>(*iter);
+                    // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                }
+
+                SVFStmt::SVFStmtSetTy& tdjns = pag->getPTASVFStmtSet(SVFStmt::ThreadJoin);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = tdjns.begin(), eiter =
+                            tdjns.end(); iter != eiter; ++iter)
+                {
+                    copycount++;
+                    if (copycount < sr)
+                        continue; 
+                    if (spr != 0 && spr != copycount)
+                        continue;
+                    stepCount++;
+                    const TDJoinPE* edge = SVFUtil::cast<TDJoinPE>(*iter);
+                    // addCopyFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FCopy));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FCopy, copycount);
+                }
             }
-        }
-        if (stepCount != 0) {
+
+            if (Options::IncVGep()) { // TODO: NGep
+                u32_t vsr = Options::VGepStartingRound();
+                u32_t vspr = Options::VGepSpecificRound();
+                u32_t nsr = Options::NGepStartingRound();
+                u32_t nspr = Options::NGepSpecificRound();
+                int gepcount = 0;
+                int vgepcount = 0;
+                int ngepcount = 0;
+                SVFStmt::SVFStmtSetTy& ngeps = pag->getPTASVFStmtSet(SVFStmt::Gep);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = ngeps.begin(), eiter =
+                            ngeps.end(); iter != eiter; ++iter)
+                {
+                    gepcount++;
+                    GepStmt* edge = SVFUtil::cast<GepStmt>(*iter);
+                    if(edge->isVariantFieldGep()) {
+                        stepCount++;
+                        vgepcount++;
+                        if (vgepcount < vsr)
+                            continue; 
+                        if (vspr != 0 && vspr != vgepcount)
+                            continue;
+                        // addVariantGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID());
+                        NodeID src = edge->getRHSVarID();
+                        NodeID dst = edge->getLHSVarID();
+                        delDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
+                        insDirectEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FVariantGep));
+                        if (stepCount == step) {
+                            stepCount = 0;
+                            incRound++;
+                            stepIncremental();
+                        }
+                        // singleIncremental(src, dst, FConstraintEdge::FVariantGep, gepcount);
+                    }
+                    else {
+                        ngepcount++;
+                        // if (ngepcount < nsr)
+                        //     continue; 
+                        // if (nspr != 0 && nspr != ngepcount)
+                        //     continue;
+                        // addNormalGepFCGEdge(edge->getRHSVarID(),edge->getLHSVarID(),edge->getAccessPath());
+                    }
+                }
+            }
+
+            if (Options::IncStore()) {
+                sr = Options::StoreStartingRound();
+                spr = Options::StoreSpecificRound();
+                int storecount = 0;
+                SVFStmt::SVFStmtSetTy& stores = pag->getPTASVFStmtSet(SVFStmt::Store);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = stores.begin(), eiter =
+                            stores.end(); iter != eiter; ++iter)
+                {
+                    storecount ++;
+                    if (storecount < sr)
+                        continue; 
+                    if (spr != 0 && spr != storecount)
+                        continue;
+                    stepCount++;
+                    StoreStmt* edge = SVFUtil::cast<StoreStmt>(*iter);
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
+                    insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FStore));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FStore, storecount);
+                }
+            }
+
+            if (Options::IncLoad()) {
+                sr = Options::LoadStartingRound();
+                spr = Options::LoadSpecificRound();
+                int loadcount = 0;
+                SVFStmt::SVFStmtSetTy& loads = pag->getPTASVFStmtSet(SVFStmt::Load);
+                for (SVFStmt::SVFStmtSetTy::iterator iter = loads.begin(), eiter =
+                            loads.end(); iter != eiter; ++iter)
+                {
+                    loadcount ++;
+                    if (loadcount < sr)
+                        continue; 
+                    if (spr != 0 && spr != loadcount)
+                        continue;
+                    stepCount++;
+                    LoadStmt* edge = SVFUtil::cast<LoadStmt>(*iter);
+                    NodeID src = edge->getRHSVarID();
+                    NodeID dst = edge->getLHSVarID();
+                    delEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
+                    insEdgeVec.push_back(new SDK(src, dst, FConstraintEdge::FLoad));
+                    if (stepCount == step) {
+                        stepCount = 0;
+                        incRound++;
+                        stepIncremental();
+                    }
+                    // singleIncremental(src, dst, FConstraintEdge::FLoad, loadcount);
+                }
+            }
+            if (stepCount != 0) {
             SVFUtil::outs() << "Last Round with " << stepCount << " stmts\n"; 
             incRound++;
             stepIncremental();
+        }
         }
     }
     finalize();

@@ -51,6 +51,8 @@ class MemSSAStat : public PTAStat
 public:
     static const char* TotalTimeOfConstructMemSSA;	///< Total time for constructing memory SSA
     static const char* TimeOfGeneratingMemRegions;	///< Time for allocating regions
+    static const char* TimeOfGeneratingMRStep1;
+    static const char* TimeOfGeneratingMRStep2;
     //
     static const char* TimeOfCollectGlobals;
     static const char* TimeOfCollectModRefForLoadStore;

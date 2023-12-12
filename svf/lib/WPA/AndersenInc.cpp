@@ -5,6 +5,7 @@
 #include "Util/SVFUtil.h"
 #include "MemoryModel/PointsTo.h"
 #include "WPA/Steensgaard.h"
+
 // #include "AndersenInc.h"
 
 using namespace SVF;
@@ -120,7 +121,12 @@ void AndersenInc::finalize()
 
     BVDataPTAImpl::finalize();
 }
+void AndersenInc::analyze_inc()
+{
+    // TODO: --wjy
+    // SVFIRGetter* irGetter = SVFIRGetter::getSVFIRGetter();
 
+}
 void AndersenInc::analyze()
 {
 

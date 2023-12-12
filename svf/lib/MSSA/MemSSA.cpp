@@ -35,6 +35,8 @@
 using namespace SVF;
 using namespace SVFUtil;
 
+double MemSSA::timeOfGeneratingMRStep1 = 0;
+double MemSSA::timeOfGeneratingMRStep2 = 0;
 double MemSSA::timeOfGeneratingMemRegions = 0;	///< Time for allocating regions
 double MemSSA::timeOfCreateMUCHI  = 0;	///< Time for generating mu/chi for load/store/calls
 double MemSSA::timeOfInsertingPHI  = 0;	///< Time for inserting phis
@@ -62,10 +64,30 @@ MemSSA::MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA)
     stat = new MemSSAStat(this);
 
     /// Generate whole program memory regions
+    if (Options::diff())
+    {
+        double mrStart = stat->getClk(true);
+        mrGen->generateMRs_exh_step1(stat);
+        double mrEnd = stat->getClk(true);
+        timeOfGeneratingMRStep1 = (mrEnd - mrStart)/TIMEINTERVAL;
+    }
+    else {
+        double mrStart = stat->getClk(true);
+        mrGen->generateMRs(stat);
+        double mrEnd = stat->getClk(true);
+        timeOfGeneratingMemRegions = (mrEnd - mrStart)/TIMEINTERVAL;
+    }
+}
+void MemSSA::generate_inc()
+{
+    mrGen->incrementalModRefAnalysis();
+}
+void MemSSA::generate_step2()
+{
     double mrStart = stat->getClk(true);
-    mrGen->generateMRs(stat);
+    mrGen->generateMRs_exh_step2(stat);
     double mrEnd = stat->getClk(true);
-    timeOfGeneratingMemRegions = (mrEnd - mrStart)/TIMEINTERVAL;
+    timeOfGeneratingMRStep2 = (mrEnd - mrStart)/TIMEINTERVAL;
 }
 
 SVFIR* MemSSA::getPAG()

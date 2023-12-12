@@ -56,7 +56,10 @@ public:
 
     SVFG* buildPTROnlySVFG(BVDataPTAImpl* pta);
     SVFG* buildFullSVFG(BVDataPTAImpl* pta);
-
+    std::unique_ptr<MemSSA> buildPTROnlySVFG_step1(BVDataPTAImpl* pta);
+    std::unique_ptr<MemSSA> buildFullSVFG_step1(BVDataPTAImpl* pta);
+    SVFG* buildPTROnlySVFG_step2(BVDataPTAImpl* pta, std::unique_ptr<MemSSA> memssa);
+    SVFG* buildFullSVFG_step2(BVDataPTAImpl* pta, std::unique_ptr<MemSSA> memssa);
     /// Get SVFG instance
     inline SVFG* getSVFG() const
     {
@@ -77,10 +80,13 @@ public:
 
     /// Build Memory SSA
     virtual std::unique_ptr<MemSSA> buildMSSA(BVDataPTAImpl* pta, bool ptrOnlyMSSA);
-
+    std::unique_ptr<MemSSA> buildMSSA_step2(BVDataPTAImpl* pta, bool ptrOnlyMSSA, std::unique_ptr<MemSSA> memssa);
+    std::unique_ptr<MemSSA> buildMSSA_step1(BVDataPTAImpl* pta, bool ptrOnlyMSSA);
 protected:
     /// Create a DDA SVFG. By default actualOut and FormalIN are removed, unless withAOFI is set true.
     SVFG* build(BVDataPTAImpl* pta, VFG::VFGK kind);
+    SVFG* build_step2(BVDataPTAImpl* pta, VFG::VFGK kind, std::unique_ptr<MemSSA> mssa);
+    std::unique_ptr<MemSSA> build_step1(BVDataPTAImpl* pta, VFG::VFGK kind);
     /// Can be rewritten by subclasses
     virtual void buildSVFG();
     /// Release global SVFG

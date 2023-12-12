@@ -102,6 +102,11 @@ private:
 
     static std::unique_ptr<SVFIR> pag;	///< Singleton pattern here to enable instance of SVFIR can only be created once.
 
+
+    SVFStmtSet diffStmts;
+    CallSiteSet diffDireCallSites;
+    CallSiteSet diffIndireCallSites;
+
     /// Constructor
     SVFIR(bool buildFromFile);
 
@@ -125,6 +130,18 @@ public:
         pag = nullptr;
     }
     //@}
+    inline SVFStmtSet& getDiffStmts()
+    {
+        return diffStmts;
+    }
+    inline CallSiteSet getDiffDireCallSites()
+    {
+        return diffDireCallSites;
+    }
+    inline CallSiteSet getDiffIndireCallSites()
+    {
+        return diffIndireCallSites;
+    }
     /// Return memToFieldsMap
     inline MemObjToFieldsMap& getMemToFieldsMap()
     {

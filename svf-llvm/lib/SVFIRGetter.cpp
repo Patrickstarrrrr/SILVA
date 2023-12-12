@@ -813,3 +813,118 @@ void SVFIRGetter::handleExtCall(const CallBase* cs, const SVFFunction* svfCallee
 
     /// TODO: inter-procedural SVFIR edges for thread joins
 }
+
+
+/*!
+ * Find the base type and the max possible offset of an object pointed to by (V).
+ */
+const Type* SVFIRGetter::getBaseTypeAndFlattenedFields(const Value* V, std::vector<AccessPath> &fields, const Value* szValue)
+{
+    assert(V);
+    const Value* value = getBaseValueForExtArg(V);
+    const Type* T = value->getType();
+    while (const PointerType *ptype = SVFUtil::dyn_cast<PointerType>(T))
+        T = getPtrElementType(ptype);
+
+    u32_t numOfElems = pag->getSymbolInfo()->getNumOfFlattenElements(LLVMModuleSet::getLLVMModuleSet()->getSVFType(T));
+    /// use user-specified size for this copy operation if the size is a constaint int
+    if(szValue && SVFUtil::isa<ConstantInt>(szValue))
+    {
+        numOfElems = (numOfElems > SVFUtil::cast<ConstantInt>(szValue)->getSExtValue()) ? SVFUtil::cast<ConstantInt>(szValue)->getSExtValue() : numOfElems;
+    }
+
+    LLVMContext& context = LLVMModuleSet::getLLVMModuleSet()->getContext();
+    for(u32_t ei = 0; ei < numOfElems; ei++)
+    {
+        AccessPath ls(ei);
+        // make a ConstantInt and create char for the content type due to byte-wise copy
+        const ConstantInt* offset = ConstantInt::get(context, llvm::APInt(32, ei));
+        const SVFValue* svfOffset = LLVMModuleSet::getLLVMModuleSet()->getSVFValue(offset);
+        // if (!pag->getSymbolInfo()->hasValSym(svfOffset))
+        // {
+        //     SymbolTableBuilder builder(pag->getSymbolInfo());
+        //     builder.collectSym(offset);
+        //     pag->addValNode(svfOffset, pag->getSymbolInfo()->getValSym(svfOffset));
+        // }
+        ls.addOffsetVarAndGepTypePair(getPAG()->getGNode(getPAG()->getValueNode(svfOffset)), nullptr);
+        fields.push_back(ls);
+    }
+    return T;
+}
+
+/*!
+ * Get a base SVFVar given a pointer
+ * Return the source node of its connected normal gep edge
+ * Otherwise return the node id itself
+ * s32_t offset : gep offset
+ */
+AccessPath SVFIRGetter::getAccessPathFromBaseNode(NodeID nodeId)
+{
+    SVFVar* node  = pag->getGNode(nodeId);
+    SVFStmt::SVFStmtSetTy& geps = node->getIncomingEdges(SVFStmt::Gep);
+    /// if this node is already a base node
+    if(geps.empty())
+        return AccessPath(0);
+
+    assert(geps.size()==1 && "one node can only be connected by at most one gep edge!");
+    SVFVar::iterator it = geps.begin();
+    const GepStmt* gepEdge = SVFUtil::cast<GepStmt>(*it);
+    if(gepEdge->isVariantFieldGep())
+        return AccessPath(0);
+    else
+        return gepEdge->getAccessPath();
+}
+
+const Value* SVFIRGetter::getBaseValueForExtArg(const Value* V)
+{
+    const Value*  value = stripAllCasts(V);
+    assert(value && "null ptr?");
+    if(const GetElementPtrInst* gep = SVFUtil::dyn_cast<GetElementPtrInst>(value))
+    {
+        APOffset totalidx = 0;
+        for (bridge_gep_iterator gi = bridge_gep_begin(gep), ge = bridge_gep_end(gep); gi != ge; ++gi)
+        {
+            if(const ConstantInt* op = SVFUtil::dyn_cast<ConstantInt>(gi.getOperand()))
+                totalidx += op->getSExtValue();
+        }
+        if(totalidx == 0 && !SVFUtil::isa<StructType>(value->getType()))
+            value = gep->getPointerOperand();
+    }
+
+    // if the argument of memcpy is the result of an allocation (1) or a casted load instruction (2),
+    // further steps are necessary to find the correct base value
+    //
+    // (1)
+    // %call   = malloc 80
+    // %0      = bitcast i8* %call to %struct.A*
+    // %1      = bitcast %struct.B* %param to i8*
+    // call void memcpy(%call, %1, 80)
+    //
+    // (2)
+    // %0 = bitcast %struct.A* %param to i8*
+    // %2 = bitcast %struct.B** %arrayidx to i8**
+    // %3 = load i8*, i8** %2
+    // call void @memcpy(%0, %3, 80)
+    LLVMContext &cxt = LLVMModuleSet::getLLVMModuleSet()->getContext();
+    if (value->getType() == PointerType::getInt8PtrTy(cxt))
+    {
+        // (1)
+        if (const CallBase* cb = SVFUtil::dyn_cast<CallBase>(value))
+        {
+            const SVFInstruction* svfInst = LLVMModuleSet::getLLVMModuleSet()->getSVFInstruction(cb);
+            if (SVFUtil::isHeapAllocExtCallViaRet(svfInst))
+            {
+                if (const Value* bitCast = getUniqueUseViaCastInst(cb))
+                    return bitCast;
+            }
+        }
+        // (2)
+        else if (const LoadInst* load = SVFUtil::dyn_cast<LoadInst>(value))
+        {
+            if (const BitCastInst* bitCast = SVFUtil::dyn_cast<BitCastInst>(load->getPointerOperand()))
+                return bitCast->getOperand(0);
+        }
+    }
+
+    return value;
+}

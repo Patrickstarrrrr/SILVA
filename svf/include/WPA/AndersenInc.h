@@ -13,7 +13,6 @@
 #include "WPA/Andersen.h"
 #include "Graphs/SuperConsG.h"
 #include "Graphs/FlatConsG.h"
-
 namespace SVF{
 class SDK 
 {
@@ -76,7 +75,7 @@ public:
 
     /// Andersen analysis
     virtual void analyze() override;
-
+    void analyze_inc();
     /// Initialize analysis
     virtual void initialize() override;
 

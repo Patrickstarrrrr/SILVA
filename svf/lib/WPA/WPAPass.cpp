@@ -45,6 +45,7 @@
 #include "WPA/TypeAnalysis.h"
 #include "WPA/Steensgaard.h"
 
+
 using namespace SVF;
 
 char WPAPass::ID = 0;
@@ -120,14 +121,36 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
 
     ptaVector.push_back(_pta);
     _pta->analyze();
-    if (Options::AnderSVFG())
+    if (Options::diff())
     {
-        SVFGBuilder memSSA(true);
-        assert((SVFUtil::isa<AndersenBase>(_pta)||SVFUtil::isa<AndersenInc>(_pta)) && "supports only andersen/steensgaard for pre-computed SVFG");
-        SVFG *svfg = memSSA.buildFullSVFG((BVDataPTAImpl*)_pta);
-        /// support mod-ref queries only for -ander
-        if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
-            _svfg = svfg;
+        if (Options::AnderSVFG())
+        {
+            SVFGBuilder svfgBuilder(true);
+            std::unique_ptr<MemSSA> mssa = svfgBuilder.buildFullSVFG_step1((BVDataPTAImpl*)_pta);
+            
+            // incremental pointer analysis
+            ((AndersenInc*)_pta)->analyze_inc();
+            // incremental mod-ref analysis
+            mssa->generate_inc();
+
+            SVFG *svfg = svfgBuilder.buildFullSVFG_step2((BVDataPTAImpl*)_pta, std::move(mssa));
+
+            /// support mod-ref queries only for -ander
+            if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
+                _svfg = svfg;
+
+        }
+    }
+    else {
+        if (Options::AnderSVFG())
+        {
+            SVFGBuilder memSSA(true);
+            assert((SVFUtil::isa<AndersenBase>(_pta)||SVFUtil::isa<AndersenInc>(_pta)) && "supports only andersen/steensgaard for pre-computed SVFG");
+            SVFG *svfg = memSSA.buildFullSVFG((BVDataPTAImpl*)_pta);
+            /// support mod-ref queries only for -ander
+            if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
+                _svfg = svfg;
+        }
     }
 
     if (Options::PrintAliases())

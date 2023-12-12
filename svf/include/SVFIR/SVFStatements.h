@@ -93,6 +93,21 @@ protected:
 public:
     bool isDeleted;
     bool isInserted;
+    inline void setInserted()
+    {
+        isDeleted = false;
+        isInserted = true;
+    }
+    inline void setDeleted()
+    {
+        isDeleted = true;
+        isInserted = false;
+    }
+    inline void resetDelIns()
+    {
+        isDeleted = false;
+        isInserted = false;
+    }
     static u32_t totalEdgeNum; ///< Total edge number
 
     /// Constructor

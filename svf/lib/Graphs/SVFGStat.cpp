@@ -36,6 +36,8 @@ using namespace std;
 
 const char* MemSSAStat::TotalTimeOfConstructMemSSA = "TotalMSSATime";	///< Total time for constructing memory SSA
 const char* MemSSAStat::TimeOfGeneratingMemRegions  = "GenRegionTime";	///< Time for allocating regions
+const char* MemSSAStat::TimeOfGeneratingMRStep1 = "GenMRStep1Time";
+const char* MemSSAStat::TimeOfGeneratingMRStep2 = "GenMRStep2Time";
 const char* MemSSAStat::TimeOfCollectGlobals = "-CollectGlobTime";
 const char* MemSSAStat::TimeOfCollectModRefForCall = "-CollectMR4CallTime";
 const char* MemSSAStat::TimeOfCollectModRefForLoadStore = "-CollectMR4LSTime";
@@ -103,6 +105,8 @@ void MemSSAStat::performStat()
 
     timeStatMap[TotalTimeOfConstructMemSSA] = (endTime - startTime)/TIMEINTERVAL;
     timeStatMap[TimeOfGeneratingMemRegions] = MemSSA::timeOfGeneratingMemRegions;
+    timeStatMap[TimeOfGeneratingMRStep1] = MemSSA::timeOfGeneratingMRStep1;
+    timeStatMap[TimeOfGeneratingMRStep2] = MemSSA::timeOfGeneratingMRStep2;
     timeStatMap[TimeOfCollectGlobals] = MRGenerator::timeOfCollectGlobals;
     timeStatMap[TimeOfCollectModRefForLoadStore] = MRGenerator::timeOfCollectModRefForLoadStore;
     timeStatMap[TimeOfCollectModRefForCall] = MRGenerator::timeOfCollectModRefForCall;

@@ -335,7 +335,9 @@ protected:
 
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
+public:
     void incrementalModRefAnalysis();
+protected:
     /// Partition regions
     virtual void partitionMRs();
 
@@ -511,8 +513,9 @@ public:
     }
 
     /// Start generating memory regions
-    virtual void generateMRs(MemSSAStat* stat);
-
+    virtual void generateMRs_exh_step1(MemSSAStat* _stat); // collectGlobals() + collectMR4LS() + collectMR4C()
+    virtual void generateMRs(MemSSAStat* _stat);
+    virtual void generateMRs_exh_step2(MemSSAStat* _stat); // partitionMRs() + updateAliasMRs()
     /// Get the function which SVFIR Edge located
     const SVFFunction* getFunction(const PAGEdge* pagEdge) const
     {

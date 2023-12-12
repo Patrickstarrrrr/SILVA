@@ -66,7 +66,7 @@ message(STATUS "Found Z3: ${Z3_LIBRARIES}")
 message(STATUS "Z3 include dir: ${Z3_INCLUDES}")
 
 include_directories(${PROJECT_SOURCE_DIR}/svf/include
-                    ${PROJECT_BINARY_DIR}/include ${Z3_INCLUDES})
+                    ${PROJECT_BINARY_DIR}/include ${Z3_INCLUDES} )
 
 # checks if the test-suite is present, if it is then build bc files and add
 # testing to cmake build

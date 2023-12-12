@@ -28,6 +28,7 @@
 
 #include "SVF-LLVM/LLVMUtil.h"
 #include "SVF-LLVM/SVFIRBuilder.h"
+#include "SVF-LLVM/SVFIRGetter.h"
 #include "WPA/WPAPass.h"
 #include "Util/CommandLine.h"
 #include "Util/Options.h"
@@ -86,8 +87,10 @@ int main(int argc, char** argv)
         SVFIRBuilder builder(svfModule);
         pag = builder.build();
     }
-    if (Options::diff())
+    if (Options::diff()) {
         diff();
+        SVFIRGetter* irGetter = SVFIRGetter::getSVFIRGetter();
+    }
     WPAPass wpa;
     wpa.runOnModule(pag);
 

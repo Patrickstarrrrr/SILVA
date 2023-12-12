@@ -42,11 +42,31 @@ public:
                 for (auto inst: insts) {
                     irGetter->visit(*const_cast<Instruction*>(inst));
                 }
+                for (auto stmt: irGetter->stmts) {
+                    const_cast<SVFStmt*>(stmt)->setInserted();
+                    irGetter->pag->getDiffStmts().insert(stmt);
+                }
+                for (auto cs: irGetter->direCallsites) {
+                    irGetter->pag->getDiffDireCallSites().insert(cs);
+                }
+                for (auto cs: irGetter->indireCallsites) {
+                    irGetter->pag->getDiffIndireCallSites().insert(cs);
+                }
             }
             else {
                 InstructionSet& insts = irDiff->getInstDeleteSet();
                 for (auto inst: insts) {
                     irGetter->visit(*const_cast<Instruction*>(inst));
+                }
+                for (auto stmt: irGetter->stmts) {
+                    const_cast<SVFStmt*>(stmt)->setDeleted();
+                    irGetter->pag->getDiffStmts().insert(stmt);
+                }
+                for (auto cs: irGetter->direCallsites) {
+                    irGetter->pag->getDiffDireCallSites().insert(cs);
+                }
+                for (auto cs: irGetter->indireCallsites) {
+                    irGetter->pag->getDiffIndireCallSites().insert(cs);
                 }
             }
         }
@@ -359,6 +379,9 @@ public:
     //@}
 
     AccessPath getAccessPathFromBaseNode(NodeID nodeId);
+    /// Get the base value of (i8* src and i8* dst) for external argument (e.g. memcpy(i8* dst, i8* src, int size))
+    const Value* getBaseValueForExtArg(const Value* V);
+
 };
 
 

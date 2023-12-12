@@ -104,6 +104,8 @@ public:
 
     /// Statistics
     //@{
+    static double timeOfGeneratingMRStep1;
+    static double timeOfGeneratingMRStep2;
     static double timeOfGeneratingMemRegions;	///< Time for allocating regions
     static double timeOfCreateMUCHI;	///< Time for generating mu/chi for load/store/calls
     static double timeOfInsertingPHI;	///< Time for inserting phis
@@ -296,7 +298,8 @@ private:
 public:
     /// Constructor
     MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA);
-
+    void generate_step2();
+    void generate_inc();
     /// Destructor
     virtual ~MemSSA()
     {

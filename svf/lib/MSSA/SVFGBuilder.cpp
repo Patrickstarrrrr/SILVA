@@ -51,7 +51,30 @@ SVFG* SVFGBuilder::buildFullSVFG(BVDataPTAImpl* pta)
     return build(pta, VFG::FULLSVFG);
 }
 
+std::unique_ptr<MemSSA> SVFGBuilder::buildPTROnlySVFG_step1(BVDataPTAImpl* pta)
+{
+    if(Options::OPTSVFG())
+        return buildMSSA_step1(pta, true);
+    else
+        return buildMSSA_step1(pta, true);
+}
+std::unique_ptr<MemSSA> SVFGBuilder::buildFullSVFG_step1(BVDataPTAImpl* pta)
+{
+    return buildMSSA_step1(pta, false);
+}
 
+SVFG* SVFGBuilder::buildPTROnlySVFG_step2(BVDataPTAImpl* pta, std::unique_ptr<MemSSA> memssa)
+{
+    if(Options::OPTSVFG())
+        return build_step2(pta, VFG::PTRONLYSVFG_OPT, std::move(memssa));
+    else
+        return build_step2(pta, VFG::PTRONLYSVFG, std::move(memssa));
+}
+
+SVFG* SVFGBuilder::buildFullSVFG_step2(BVDataPTAImpl* pta, std::unique_ptr<MemSSA> memssa)
+{
+    return build_step2(pta, VFG::FULLSVFG, std::move(memssa));
+}
 /*!
  * Create SVFG
  */
@@ -71,6 +94,37 @@ SVFG* SVFGBuilder::build(BVDataPTAImpl* pta, VFG::VFGK kind)
         svfg = std::make_unique<SVFGOPT>(std::move(mssa), kind);
     else
         svfg = std::unique_ptr<SVFG>(new SVFG(std::move(mssa),kind));
+    buildSVFG();
+
+    /// Update call graph using pre-analysis results
+    if(Options::SVFGWithIndirectCall() || SVFGWithIndCall)
+        svfg->updateCallGraph(pta);
+
+    if(svfg->getMSSA()->getPTA()->printStat())
+        svfg->performStat();
+
+    if(Options::DumpVFG())
+        svfg->dump("svfg_final");
+
+    return svfg.get();
+}
+std::unique_ptr<MemSSA> SVFGBuilder::build_step1(BVDataPTAImpl* pta, VFG::VFGK kind)
+{
+
+    auto mssa = buildMSSA_step1(pta, (VFG::PTRONLYSVFG==kind || VFG::PTRONLYSVFG_OPT==kind));
+
+    return mssa;
+}
+SVFG* SVFGBuilder::build_step2(BVDataPTAImpl* pta, VFG::VFGK kind, std::unique_ptr<MemSSA> mssa)
+{
+
+    auto mssa2 = buildMSSA_step2(pta, (VFG::PTRONLYSVFG==kind || VFG::PTRONLYSVFG_OPT==kind), std::move(mssa));
+
+    DBOUT(DGENERAL, outs() << pasMsg("Build Sparse Value-Flow Graph \n"));
+    if(kind == VFG::FULLSVFG_OPT || kind == VFG::PTRONLYSVFG_OPT)
+        svfg = std::make_unique<SVFGOPT>(std::move(mssa2), kind);
+    else
+        svfg = std::unique_ptr<SVFG>(new SVFG(std::move(mssa2),kind));
     buildSVFG();
 
     /// Update call graph using pre-analysis results
@@ -121,5 +175,34 @@ std::unique_ptr<MemSSA> SVFGBuilder::buildMSSA(BVDataPTAImpl* pta, bool ptrOnlyM
 
     return mssa;
 }
+std::unique_ptr<MemSSA> SVFGBuilder::buildMSSA_step1(BVDataPTAImpl* pta, bool ptrOnlyMSSA)
+{
 
+    auto mssa = std::make_unique<MemSSA>(pta, ptrOnlyMSSA);
 
+    return mssa;
+}
+std::unique_ptr<MemSSA> SVFGBuilder::buildMSSA_step2(BVDataPTAImpl* pta, bool ptrOnlyMSSA, std::unique_ptr<MemSSA> mssa)
+{
+    mssa->generate_step2();
+    
+    SVFModule* svfModule = mssa->getPTA()->getModule();
+    for (SVFModule::const_iterator iter = svfModule->begin(), eiter = svfModule->end();
+            iter != eiter; ++iter)
+    {
+
+        const SVFFunction *fun = *iter;
+        if (isExtCall(fun))
+            continue;
+
+        mssa->buildMemSSA(*fun);
+    }
+
+    mssa->performStat();
+    if (Options::DumpMSSA())
+    {
+        mssa->dumpMSSA();
+    }
+
+    return mssa;
+}

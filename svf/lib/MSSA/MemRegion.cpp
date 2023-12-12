@@ -131,6 +131,53 @@ void MRGenerator::collectGlobals()
  * Generate memory regions according to pointer analysis results
  * Attach regions on loads/stores
  */
+void MRGenerator::generateMRs_exh_step1(MemSSAStat* _stat)
+{
+    stat = _stat;
+
+    DBOUT(DGENERAL, outs() << pasMsg("Generate Memory Regions \n"));
+
+    double cgStart = stat->getClk(true);
+    collectGlobals();
+    double cgEnd = stat->getClk(true);
+    timeOfCollectGlobals += (cgEnd - cgStart)/TIMEINTERVAL;
+
+    callGraphSCC->find();
+
+    DBOUT(DGENERAL, outs() << pasMsg("\tCollect ModRef For Load/Store \n"));
+
+    /// collect mod-ref for loads/stores
+    double lsStart = stat->getClk(true);
+    collectModRefForLoadStore();
+    double lsEnd = stat->getClk(true);
+    timeOfCollectModRefForLoadStore += (lsEnd - lsStart)/TIMEINTERVAL;
+
+    DBOUT(DGENERAL, outs() << pasMsg("\tCollect ModRef For const CallICFGNode*\n"));
+
+    /// collect mod-ref for calls
+    double mfcStart = stat->getClk(true);
+    collectModRefForCall();
+    double mfcEnd = stat->getClk(true);
+    timeOfCollectModRefForCall += (mfcEnd - mfcStart)/TIMEINTERVAL;
+}
+
+void MRGenerator::generateMRs_exh_step2(MemSSAStat* _stat)
+{
+    stat = _stat;
+    DBOUT(DGENERAL, outs() << pasMsg("\tPartition Memory Regions \n"));
+    /// Partition memory regions
+    double pmrStart = stat->getClk(true);
+    partitionMRs();
+    double pmrEnd = stat->getClk(true);
+    timeOfPartitionMRs += (pmrEnd - pmrStart)/TIMEINTERVAL;
+    /// attach memory regions for loads/stores/calls
+
+    double uaStart = stat->getClk(true);
+    updateAliasMRs();
+    double uaEnd = stat->getClk(true);
+    timeOfUpdateAliasMRs += (uaEnd - uaStart)/TIMEINTERVAL;
+}
+
 void MRGenerator::generateMRs(MemSSAStat* _stat)
 {
     stat = _stat;
@@ -468,6 +515,7 @@ void MRGenerator::collectModRefForLoadStore_inc()
 
 void MRGenerator::incrementalModRefAnalysis()
 {
+    incpta = dyn_cast<AndersenInc>(pta);
     initChangedFunctions();
 
     collectModRefForLoadStore_inc();

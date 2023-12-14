@@ -87,7 +87,7 @@ int main(int argc, char** argv)
         SVFIRBuilder builder(svfModule);
         pag = builder.build();
     }
-    if (Options::diff()) {
+    if (Options::irdiff()) {
         diff();
         SVFIRGetter* irGetter = SVFIRGetter::getSVFIRGetter();
     }

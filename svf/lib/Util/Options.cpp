@@ -1059,8 +1059,8 @@ const Option<std::string> Options::diffresult(
     ""
 );
 
-const Option<bool> Options::diff(
-    "diff", 
+const Option<bool> Options::irdiff(
+    "irdiff", 
     "wether to use diff module",
     false
 );

@@ -121,7 +121,7 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
 
     ptaVector.push_back(_pta);
     _pta->analyze();
-    if (Options::diff())
+    if (Options::irdiff())
     {
         if (Options::AnderSVFG())
         {

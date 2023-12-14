@@ -76,6 +76,7 @@ public:
     /// Andersen analysis
     virtual void analyze() override;
     void analyze_inc();
+    void getDiffSDK();
     /// Initialize analysis
     virtual void initialize() override;
 

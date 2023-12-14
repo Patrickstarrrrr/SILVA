@@ -304,7 +304,7 @@ public:
     static const Option<std::string> beforecpp;
     static const Option<std::string> sourcediff;
     static const Option<std::string> diffresult;
-    static const Option<bool> diff;
+    static const Option<bool> irdiff;
     /// for ir diff
     
 };

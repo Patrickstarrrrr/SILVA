@@ -64,7 +64,7 @@ MemSSA::MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA)
     stat = new MemSSAStat(this);
 
     /// Generate whole program memory regions
-    if (Options::diff())
+    if (Options::irdiff())
     {
         double mrStart = stat->getClk(true);
         mrGen->generateMRs_exh_step1(stat);

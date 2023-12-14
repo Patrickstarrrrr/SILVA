@@ -515,6 +515,7 @@ void MRGenerator::collectModRefForLoadStore_inc()
 
 void MRGenerator::incrementalModRefAnalysis()
 {
+    double incStart = stat->getClk();
     incpta = dyn_cast<AndersenInc>(pta);
     initChangedFunctions();
 
@@ -656,7 +657,8 @@ void MRGenerator::incrementalModRefAnalysis()
         }
     }
 
-    
+    double incEnd = stat->getClk();
+    SVFUtil::outs() << "Mod Ref (All): " << (incEnd - incStart)/TIMEINTERVAL;
 }
 /*!
  * Generate memory regions for calls
@@ -694,9 +696,9 @@ void MRGenerator::collectModRefForCall()
         }
     }
     double mrEnd = stat->getClk(true);
-    SVFUtil::outs() << "Mod Ref: " << (mrEnd - mrStart)/TIMEINTERVAL;
+    SVFUtil::outs() << "Mod Ref (WLSolver): " << (mrEnd - mrStart)/TIMEINTERVAL;
 
-    timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
+    // timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
 
     DBOUT(DGENERAL, outs() << pasMsg("\t\tAdd PointsTo to Callsites \n"));
 

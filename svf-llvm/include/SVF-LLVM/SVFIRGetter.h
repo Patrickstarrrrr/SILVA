@@ -30,7 +30,7 @@ private:
     static std::unique_ptr<SVFIRGetter> irGetter;
     // InstructionSet diffInst;
 public:
-    
+    /// Set current basic block in order to keep track of control flow information
     static inline SVFIRGetter* getSVFIRGetter()
     {
         if (irGetter == nullptr)
@@ -40,6 +40,7 @@ public:
             if (Options::IsNew()) {
                 InstructionSet& insts = irDiff->getInstAddSet();
                 for (auto inst: insts) {
+                    irGetter->setCurrentLocation(inst,inst->getParent());
                     irGetter->visit(*const_cast<Instruction*>(inst));
                 }
                 for (auto stmt: irGetter->stmts) {
@@ -56,6 +57,7 @@ public:
             else {
                 InstructionSet& insts = irDiff->getInstDeleteSet();
                 for (auto inst: insts) {
+                    irGetter->setCurrentLocation(inst,inst->getParent());
                     irGetter->visit(*const_cast<Instruction*>(inst));
                 }
                 for (auto stmt: irGetter->stmts) {

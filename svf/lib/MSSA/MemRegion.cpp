@@ -1035,13 +1035,21 @@ bool MRGenerator::addModSideEffectOfCallSite(const CallICFGNode* cs, const NodeB
  */
 void MRGenerator::getCallGraphSCCRevTopoOrder(WorkList& worklist)
 {
-
+    NodeStack revTopoOrder;
     NodeStack& topoOrder = callGraphSCC->topoNodeStack();
     while(!topoOrder.empty())
     {
         NodeID callgraphNodeID = topoOrder.top();
         topoOrder.pop();
+        revTopoOrder.push(callgraphNodeID);
         worklist.push(callgraphNodeID);
+    }
+    // restore the topological order for later solving.
+    while (!revTopoOrder.empty())
+    {
+        NodeID nodeId = revTopoOrder.top();
+        revTopoOrder.pop();
+        topoOrder.push(nodeId);
     }
 }
 

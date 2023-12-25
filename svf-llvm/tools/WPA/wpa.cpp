@@ -55,12 +55,14 @@ void diff()
     // starttime = stat->getClk();
     IRDiffHandler* irDiff = IRDiffHandler::getIRDiffHandler();
     irDiff->parse();
-    if (Options::IsNew()) {
-        auto add = irDiff->getInstAddSet();
-        auto del = irDiff->getInstDeleteSet();
-        if (add.empty() && del.empty())
-            assert(0 && "No inst changed!");
-    }
+    
+    auto add = irDiff->getInstAddSet();
+    auto del = irDiff->getInstDeleteSet();
+    if (add.empty() && del.empty())
+        assert(0 && "No inst changed!");
+    SVFUtil::outs() << "Add insts: " << add.size() << "\n";
+    SVFUtil::outs() << "Del insts: " << del.size() << "\n";
+
     // endtime = stat->getClk();
     // stat->StatTimeOfIrDiff(starttime, endtime);
 

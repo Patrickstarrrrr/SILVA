@@ -391,6 +391,7 @@ void MRGenerator::initChangedFunctions()
                 break;
         }
     }
+
 }
 /*!
  * Generate memory regions for loads/stores
@@ -515,11 +516,23 @@ void MRGenerator::collectModRefForLoadStore_inc()
 
 void MRGenerator::incrementalModRefAnalysis()
 {
+    SVFUtil::outs() << "Incremental Mod Ref Analysis Starts...\n";
     double incStart = stat->getClk();
     incpta = dyn_cast<AndersenInc>(pta);
-    initChangedFunctions();
 
+    SVFUtil::outs() << "Incremental Changed Functions Initialization Starts...\n";
+    double initCFStart = stat->getClk();
+    initChangedFunctions();
+    double initCFEnd = stat->getClk();
+    SVFUtil::outs() << "Time of initChangedFunctions: " << (initCFEnd - initCFStart) / TIMEINTERVAL << "\n";
+    SVFUtil::outs() << "Store changed functions: " << storeChangedFunctions.size() << "\n";
+    SVFUtil::outs() << "Load changed functions: " << loadChangedFunctions.size() << "\n";
+
+    SVFUtil::outs() << "Incremental Mod Ref for Load Store Starts...\n";
+    double incLSStart = stat->getClk();
     collectModRefForLoadStore_inc();
+    double incLSEnd = stat->getClk();
+    SVFUtil::outs() << "Time of CollectModRefForLoadStore_inc: " << (incLSEnd - incLSStart) / TIMEINTERVAL << "\n";
     
     // U/D_callsite |= (N_callsite \intersection U/D_callee) \union (G \intersection U/D_callee)
     // 
@@ -531,7 +544,8 @@ void MRGenerator::incrementalModRefAnalysis()
     // 5. recompute mod/ref from the bottom up
 
     // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
-    
+    SVFUtil::outs() << "Deletion Mod Ref Reset and Propagation Starts...\n";
+    double resetStart = stat->getClk();
     WorkList worklist;
     WorkList modlist;
     WorkList reflist;
@@ -588,14 +602,23 @@ void MRGenerator::incrementalModRefAnalysis()
     }
     funToDelModsMap.clear();
     funToDelRefsMap.clear();
+    double resetEnd = stat->getClk();
+    SVFUtil::outs() << "Time of Resetting and Propatating Deletion Mod Ref Set: " << 
+        (resetEnd - resetStart) / TIMEINTERVAL << "\n";
 
     // 2. recompute globs and get del globs
+    SVFUtil::outs() << "Globs and Deletion Globs Recomputation Starts...\n";
+    double globStart = stat->getClk();
     allGlobals_t = allGlobals;
     allGlobals.clear();
     collectGlobals();
     dGlobs = allGlobals_t - allGlobals;
+    double globEnd = stat->getClk();
+    SVFUtil::outs() << "Time of Recompute Globs: " << (globEnd - globStart) / TIMEINTERVAL << "\n";
 
     // 3. recompute argspts/retspts and get del argspts/retspts
+    SVFUtil::outs() << "ArgsPts/RetsPts and Deletion ArgsPts/RetsPts Recomputation Starts...\n";
+    double argStart = stat->getClk();
     cachedPtsChainMap.clear(); // clear cachedPtsChainMap
     for(SVFIR::CallSiteSet::const_iterator it =  pta->getPAG()->getCallSiteSet().begin(),
             eit = pta->getPAG()->getCallSiteSet().end(); it!=eit; ++it)
@@ -603,8 +626,13 @@ void MRGenerator::incrementalModRefAnalysis()
         const CallICFGNode* cnode = (*it);
         collectCallSitePts_inc((*it));
     }
+    double argEnd = stat->getClk();
+    SVFUtil::outs() << "Time of Recompute ArgsPts/RetsPts: " << (argEnd - argStart) / TIMEINTERVAL << "\n";
+
     // 4. reset and propagate del globs and del argspts/retspts 
     //      from the bottom up base on the function mod/ref set changed
+    SVFUtil::outs() << "Deletion Globs and ArgsPts/RetPts Reset and Propagation Starts...\n";
+    double gaStart = stat->getClk();
     getCallGraphSCCRevTopoOrder(worklist);
     while(!worklist.empty())
     {
@@ -619,12 +647,16 @@ void MRGenerator::incrementalModRefAnalysis()
             delGlobsArgsRetsPtsAnalysis(subCallGraphNode, worklist);
         }
     }
+    double gaEnd = stat->getClk();
+    SVFUtil::outs() << "Time of Resetting and Propagating Deletion Globs/ArgsPts/RetsPts: " 
+        << (gaEnd - gaStart) / TIMEINTERVAL << "\n";
     // TODO: handle changed callsite/calledge?
     
     // 5.  recompute mod/ref from the bottom up
+    SVFUtil::outs() << "Recomputation Mod Ref Starts...\n";
+    double rcStart = stat->getClk();
     getCallGraphSCCRevTopoOrder(worklist);
 
-    double mrStart = stat->getClk(true);
     while(!worklist.empty())
     {
         NodeID callGraphNodeID = worklist.pop();
@@ -637,10 +669,12 @@ void MRGenerator::incrementalModRefAnalysis()
             modRefAnalysis(subCallGraphNode,worklist);
         }
     }
-    double mrEnd = stat->getClk(true);
-    SVFUtil::outs() << "Mod Ref Inc: " << (mrEnd - mrStart)/TIMEINTERVAL;
+    double rcEnd = stat->getClk();
+    SVFUtil::outs() << "Time of recomputing mod ref: " << (rcEnd - rcStart)/TIMEINTERVAL << "\n";
 
     // 6. addCPtsToCallSite
+    SVFUtil::outs() << "AddCPtsToCallSite Starts...\n";
+    double acpStart = stat->getClk();
     for (const CallICFGNode* callBlockNode : pta->getPAG()->getCallSiteSet())
     {
         if(hasRefSideEffectOfCallSite(callBlockNode))
@@ -656,9 +690,11 @@ void MRGenerator::incrementalModRefAnalysis()
             addCPtsToCallSiteRefs(mods,callBlockNode);
         }
     }
+    double acpEnd = stat->getClk();
+    SVFUtil::outs() << "Time of addCPtsToCallSite: " << (acpEnd - acpStart)/TIMEINTERVAL << "\n";
 
     double incEnd = stat->getClk();
-    SVFUtil::outs() << "Mod Ref (All): " << (incEnd - incStart)/TIMEINTERVAL;
+    SVFUtil::outs() << "Mod Ref (All): " << (incEnd - incStart)/TIMEINTERVAL << "\n";
 }
 /*!
  * Generate memory regions for calls
@@ -696,7 +732,7 @@ void MRGenerator::collectModRefForCall()
         }
     }
     double mrEnd = stat->getClk(true);
-    SVFUtil::outs() << "Mod Ref (WLSolver): " << (mrEnd - mrStart)/TIMEINTERVAL;
+    SVFUtil::outs() << "Mod Ref (collectModRefForCall): " << (mrEnd - mrStart)/TIMEINTERVAL << "\n";
 
     // timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
 

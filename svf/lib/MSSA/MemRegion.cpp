@@ -591,12 +591,12 @@ void MRGenerator::incrementalModRefAnalysis()
         }
     }
     while (!modlist.empty()) {
-        NodeID callGraphNodeID = worklist.pop();
+        NodeID callGraphNodeID = modlist.pop();
         PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
         delModAnalysis(callGraphNode, modlist);
     }
     while (!reflist.empty()) {
-        NodeID callGraphNodeID = worklist.pop();
+        NodeID callGraphNodeID = reflist.pop();
         PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
         delRefAnalysis(callGraphNode, reflist);
     }

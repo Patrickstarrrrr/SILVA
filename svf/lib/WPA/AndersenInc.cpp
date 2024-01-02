@@ -1049,9 +1049,9 @@ void AndersenInc::normalizePointsTo()
         const APOffset apOffset = gepNode->getConstantFieldIdx();
         GepObjVarMap.erase(std::make_pair(base, apOffset));
         memToFieldsMap[base].reset(n);
-        cleanConsCG(n);
+        // cleanConsCG(n); // wjy: incremental analysis should keep old consCG
 
-        pag->removeGNode(gepNode);
+        // pag->removeGNode(gepNode); // wjy: incremental analysis should keep old consCG
     }
 }
 

@@ -305,6 +305,7 @@ public:
     static const Option<std::string> sourcediff;
     static const Option<std::string> diffresult;
     static const Option<bool> irdiff;
+    static const Option<bool> wjydebug;
     /// for ir diff
     
 };

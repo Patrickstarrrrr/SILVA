@@ -27,6 +27,7 @@ u32_t AndersenInc::numOfSCCDetection = 0;
 double AndersenInc::timeOfSCCDetection = 0;
 double AndersenInc::timeOfSCCMerges = 0;
 double AndersenInc::timeOfCollapse = 0;
+double AndersenInc::timeOfCollapsePWC = 0;
 
 u32_t AndersenInc::AveragePointsToSetSize = 0;
 u32_t AndersenInc::MaxPointsToSetSize = 0;
@@ -125,7 +126,7 @@ void AndersenInc::analyze_inc_reset()
 {
     SVFUtil::outs() << "Initialze incremental edgeVec(Reset):\n";
     getDiffSDK(true);
-    // initAllPDM();
+    initAllPDM();
     SVFUtil::outs() << "Process deletion analysis(Reset):\n";
     double delStart = stat->getClk();
     processDeletion_EdgeConstraint();
@@ -155,7 +156,7 @@ void AndersenInc::analyze_inc_reset()
     // timeOfIncrementalPTA += timeOfDeletionPTA + timeOfInsertionPTA;
     // SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
 
-    // computeAllPDM();
+    computeAllPDM();
 }
 void AndersenInc::analyze_inc()
 {
@@ -168,7 +169,7 @@ void AndersenInc::analyze_inc()
         processDeletion_EdgeConstraint();
         double delEnd = stat->getClk();
         timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
-        
+        timeOfIncrementalPTA = timeOfDeletionPTA;
         SVFUtil::outs() << "Time of deletion PTA: " << timeOfDeletionPTA << "\n";
         SVFUtil::outs() << "  - Time of SCC Deletion: " << timeOfDeletionSCC << "\n";
         SVFUtil::outs() << "    -- Time of SCC Build TempG: " << sCG->timeOfBuildTempG << "\n";
@@ -192,11 +193,12 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "  - Time of SCC Insertion (so far): " << timeOfInsertionSCC << "\n";
         SVFUtil::outs() << "  - Time of Ins Pts Prop: " << timeOfInsertionProp << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
-        timeOfIncrementalPTA += timeOfDeletionPTA + timeOfInsertionPTA;
+        timeOfIncrementalPTA = timeOfInsertionPTA;
         SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
     }
 
     computeAllPDM();
+    stat->performStat();
 }
 
 void AndersenInc::getDiffSDK(bool additionReset)
@@ -1411,7 +1413,7 @@ bool AndersenInc::collapseField(NodeID nodeId)
 
     bool changed = false;
 
-    double start = stat->getClk();
+    // double start = stat->getClk();
 
     // set base node field-insensitive.
     setObjFieldInsensitive(nodeId);
@@ -1454,8 +1456,8 @@ bool AndersenInc::collapseField(NodeID nodeId)
         if (collapseNodePts(baseRepNodeId))
             changed = true;
 
-    double end = stat->getClk();
-    timeOfCollapse += (end - start) / TIMEINTERVAL;
+    // double end = stat->getClk();
+    // timeOfCollapse += (end - start) / TIMEINTERVAL;
 
     return changed;
 }
@@ -1765,10 +1767,17 @@ void AndersenInc::solveWorklist()
     {
         NodeID nodeId = nodeStack.top();
         nodeStack.pop();
+        double collapsePWCStart = stat->getClk();
         collapsePWCNode(nodeId);
+        double collapsePWCEnd = stat->getClk();
+        timeOfCollapsePWC += (collapsePWCEnd - collapsePWCStart) / TIMEINTERVAL;
         // process nodes in nodeStack
         processNode(nodeId);
+
+        double collapseFieldsStart = stat->getClk();
         collapseFields();
+        double collapseFieldsEnd = stat->getClk();
+        timeOfCollapse += (collapseFieldsEnd - collapseFieldsStart) / TIMEINTERVAL;
     }
 
     // New nodes will be inserted into workList during processing.
@@ -2746,7 +2755,7 @@ void AndersenInc::initAllPDM()
     // OrderedNodeSet pagNodes;
     for (auto it = allPtsDiffMap.begin(), eit = allPtsDiffMap.end(); it != eit; ++it)
     {
-        NodeID n = it->first;
+        // NodeID n = it->first;
         PtsDiff* pd = it->second;
         delete pd;
     }
@@ -2771,6 +2780,7 @@ void AndersenInc::computeAllPDM()
     //     pagNodes.insert(it->first);
     // }
     ptsChangeNodes.clear();
+    int count = 0;
     for (auto iter = allPtsDiffMap.begin(), eiter = allPtsDiffMap.end(); 
         iter != eiter; ++iter)
     {
@@ -2789,6 +2799,7 @@ void AndersenInc::computeAllPDM()
             pd->delPts = prepts - incpts;
             pd->insPts = incpts - prepts;
             ptsChangeNodes.set(n);
+            count ++;
             // SVFUtil::outs() << "@@ Pts Diff @@: " << n << "\n";
             // SVFUtil::outs() << "@@@ delPts: ";
             // dumpPts(pd->delPts);
@@ -2797,6 +2808,7 @@ void AndersenInc::computeAllPDM()
             // SVFUtil::outs() << "@@@@@@@@@@@@@@@@@@@@@@@@@@@\n";
         }
     }
+    SVFUtil::outs() << "PtsChangeNodes Size: " << count << "\n";
 }
 // NodeBS& AndersenInc::addRevChainNode(NodeID o)
 // {

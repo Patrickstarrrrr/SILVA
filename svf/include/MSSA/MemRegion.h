@@ -253,8 +253,63 @@ private:
     FunToPointsToMap funToRefsMap_ls_t;
 
     FunToPointsToMap funToRefsMap_cs;
-
-
+public:
+    inline void dump_funToPointsToMap() {
+        SVFUtil::outs() << "funtoPointsToMap:\n";
+        for(auto iter = funToPointsToMap.begin(); iter != funToPointsToMap.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            PointsToList ptsl = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "pts list: [\n";
+            for (auto pit = ptsl.begin(); pit != ptsl.end(); pit++) {
+                SVFUtil::dumpSparseSet(*pit);
+            }
+            SVFUtil::outs() << "]\n";
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "funtoPointsToMap_ls:\n";
+        for(auto iter = funToPointsToMap_ls.begin(); iter != funToPointsToMap_ls.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            PointsToList ptsl = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "pts list ls: [\n";
+            for (auto pit = ptsl.begin(); pit != ptsl.end(); pit++) {
+                SVFUtil::dumpSparseSet(*pit);
+            }
+            SVFUtil::outs() << "]\n";
+            SVFUtil::outs() << "\n";
+        }
+    }
+    inline void dump_funToRefsMap() {
+        SVFUtil::outs() << "funtoRefsMap:\n";
+        for(auto iter = funToRefsMap.begin(); iter != funToRefsMap.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS refs = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "refs: ";
+            SVFUtil::dumpSparseSet(refs);
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "funtoRefsMap_ls:\n";
+        for(auto iter = funToRefsMap_ls.begin(); iter != funToRefsMap_ls.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS refs = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "refs: ";
+            SVFUtil::dumpSparseSet(refs);
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "funtoRefsMap_cs:\n";
+        for(auto iter = funToRefsMap_cs.begin(); iter != funToRefsMap_cs.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS refs = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "refs: ";
+            SVFUtil::dumpSparseSet(refs);
+            SVFUtil::outs() << "\n";
+        }
+    }
+  private:
     /// Map a function to its indirect defs of memory objects
     FunToPointsToMap funToModsMap; // funToMods := funToMods_ls \union funToMods_cs
     FunToPointsToMap funToModsMap_t;
@@ -266,11 +321,79 @@ private:
 
     FunToPointsToMap funToDelModsMap;
     FunToPointsToMap funToDelRefsMap;
-
+public:
+    inline void dump_funToModsMap() {
+        SVFUtil::outs() << "funtoModsMap:\n";
+        for(auto iter = funToModsMap.begin(); iter != funToModsMap.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS mods = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "mods: ";
+            SVFUtil::dumpSparseSet(mods);
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "funtoModsMap_ls:\n";
+        for(auto iter = funToModsMap_ls.begin(); iter != funToModsMap_ls.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS mods = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "mods: ";
+            SVFUtil::dumpSparseSet(mods);
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "funtoModsMap_cs:\n";
+        for(auto iter = funToModsMap_cs.begin(); iter != funToModsMap_cs.end(); ++iter) {
+            const SVFFunction* svffun = iter->first;
+            NodeBS mods = iter->second;
+            SVFUtil::outs() << "fun: " << svffun->getName() << "\n";
+            SVFUtil::outs() << "mods: ";
+            SVFUtil::dumpSparseSet(mods);
+            SVFUtil::outs() << "\n";
+        }
+    }
+  private:
     /// Map a callsite to its indirect uses of memory objects
     CallSiteToPointsToMap csToRefsMap;
     /// Map a callsite to its indirect defs of memory objects
     CallSiteToPointsToMap csToModsMap;
+
+public:
+    inline void dump_csToModRef() {
+        SVFUtil::outs() << "csToRefsMap_cs:\n";
+        for (auto iter = csToRefsMap.begin(); iter != csToRefsMap.end(); ++iter) {
+            const CallICFGNode* callnode = iter->first;
+            NodeBS refs = iter->second;
+            SVFUtil::outs() << "callnode: ";
+            callnode->dump();
+            SVFUtil::outs() << "\n";
+            SVFUtil::outs() << "refs: ";
+            SVFUtil::dumpSparseSet(refs);
+            SVFUtil::outs() << "\n";
+        }
+        SVFUtil::outs() << "csToModsMap_cs:\n";
+        for (auto iter = csToModsMap.begin(); iter != csToModsMap.end(); ++iter) {
+            const CallICFGNode* callnode = iter->first;
+            NodeBS mods = iter->second;
+            SVFUtil::outs() << "callnode: ";
+            callnode->dump();
+            SVFUtil::outs() << "\n";
+            SVFUtil::outs() << "mods: ";
+            SVFUtil::dumpSparseSet(mods);
+            SVFUtil::outs() << "\n";
+        }
+    }
+    inline void debugdump() {
+        SVFUtil::outs() << "$$$$$$$$$$$$$$$$$$$$$$$$$\n";
+        dump_funToPointsToMap();
+        dump_funToRefsMap();
+        dump_funToModsMap();
+        dump_csToModRef();
+        SVFUtil::outs() << "globs: ";
+        SVFUtil::dumpSparseSet(allGlobals);
+        SVFUtil::outs() << "\n";
+        SVFUtil::outs() << "$$$$$$$$$$$$$$$$$$$$$$$$$\n";
+    }
+private:
     /// Map a callsite to all its object might pass into its callees
     CallSiteToPointsToMap csToCallSiteArgsPtsMap;
     CallSiteToPointsToMap csToCallSiteArgsPtsMap_t;

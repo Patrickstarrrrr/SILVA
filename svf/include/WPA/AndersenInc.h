@@ -132,6 +132,7 @@ public:
     static double timeOfSCCDetection;
     static double timeOfSCCMerges;
     static double timeOfCollapse;
+    static double timeOfCollapsePWC;
     static u32_t AveragePointsToSetSize;
     static u32_t MaxPointsToSetSize;
     static double timeOfProcessCopyGep;

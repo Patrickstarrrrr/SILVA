@@ -53,6 +53,8 @@ public:
     static const char* TimeOfGeneratingMemRegions;	///< Time for allocating regions
     static const char* TimeOfGeneratingMRStep1;
     static const char* TimeOfGeneratingMRStep2;
+    static const char* TimeOfIncMRARound1;
+    static const char* TimeOfIncMRARound2;
     //
     static const char* TimeOfCollectGlobals;
     static const char* TimeOfCollectModRefForLoadStore;

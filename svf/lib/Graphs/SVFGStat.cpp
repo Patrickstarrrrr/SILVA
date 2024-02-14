@@ -38,6 +38,8 @@ const char* MemSSAStat::TotalTimeOfConstructMemSSA = "TotalMSSATime";	///< Total
 const char* MemSSAStat::TimeOfGeneratingMemRegions  = "GenRegionTime";	///< Time for allocating regions
 const char* MemSSAStat::TimeOfGeneratingMRStep1 = "GenMRStep1Time";
 const char* MemSSAStat::TimeOfGeneratingMRStep2 = "GenMRStep2Time";
+const char* MemSSAStat::TimeOfIncMRARound1 = "IncMRAR1Time";
+const char* MemSSAStat::TimeOfIncMRARound2 = "IncMRAR2Time";
 const char* MemSSAStat::TimeOfCollectGlobals = "-CollectGlobTime";
 const char* MemSSAStat::TimeOfCollectModRefForCall = "-CollectMR4CallTime";
 const char* MemSSAStat::TimeOfCollectModRefForLoadStore = "-CollectMR4LSTime";
@@ -107,6 +109,13 @@ void MemSSAStat::performStat()
     timeStatMap[TimeOfGeneratingMemRegions] = MemSSA::timeOfGeneratingMemRegions;
     timeStatMap[TimeOfGeneratingMRStep1] = MemSSA::timeOfGeneratingMRStep1;
     timeStatMap[TimeOfGeneratingMRStep2] = MemSSA::timeOfGeneratingMRStep2;
+    //
+    timeStatMap[TimeOfIncMRARound1] = MemSSA::timeOfIncMRARound1;
+    timeStatMap[TimeOfIncMRARound2] = MemSSA::timeOfIncMRARound2;
+    timeStatMap["ExhMSSATime"] = timeStatMap[TotalTimeOfConstructMemSSA] - timeStatMap[TimeOfIncMRARound1] - timeStatMap[TimeOfIncMRARound2];
+    timeStatMap["IncMSSATime"] = timeStatMap["ExhMSSATime"] - timeStatMap[TimeOfGeneratingMRStep1] + 
+        (MemSSA::timeOfIncMRARound2 == 0 ? MemSSA::timeOfIncMRARound1: MemSSA::timeOfIncMRARound2);
+    //
     timeStatMap[TimeOfCollectGlobals] = MRGenerator::timeOfCollectGlobals;
     timeStatMap[TimeOfCollectModRefForLoadStore] = MRGenerator::timeOfCollectModRefForLoadStore;
     timeStatMap[TimeOfCollectModRefForCall] = MRGenerator::timeOfCollectModRefForCall;
@@ -204,6 +213,7 @@ void SVFGStat::performStat()
     processGraph();
 
     timeStatMap["TotalTime"] = (endTime - startTime)/TIMEINTERVAL;
+    timeStatMap["SVFGTotalTime"] = timeStatMap["TotalTime"];
 
     timeStatMap["ConnDirEdgeTime"] = (connectDirSVFGEdgeTimeEnd - connectDirSVFGEdgeTimeStart)/TIMEINTERVAL;
 

@@ -159,6 +159,10 @@ void MRGenerator::generateMRs_exh_step1(MemSSAStat* _stat)
     collectModRefForCall();
     double mfcEnd = stat->getClk(true);
     timeOfCollectModRefForCall += (mfcEnd - mfcStart)/TIMEINTERVAL;
+
+    if (Options::wjydebug()) {
+        debugdump();
+    }
 }
 
 void MRGenerator::generateMRs_exh_step2(MemSSAStat* _stat)
@@ -398,7 +402,8 @@ void MRGenerator::initChangedFunctions()
  */
 void MRGenerator::collectModRefForLoadStore_inc()
 {
-
+    mods_lsChangedFunctions.clear();
+    refs_lsChangedFunctions.clear();
     SVFModule* svfModule = incpta->getModule();
     for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
             ++fi)
@@ -512,6 +517,8 @@ void MRGenerator::collectModRefForLoadStore_inc()
         funToPointsToMap[&fun].clear();
         funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
     }
+    SVFUtil::outs() << "Mods_ls changed functions num: " << mods_lsChangedFunctions.size() << "\n";
+    SVFUtil::outs() << "Refs_ls changed functions num: " << refs_lsChangedFunctions.size() << "\n";
 }
 
 void MRGenerator::incrementalModRefAnalysis()
@@ -610,10 +617,13 @@ void MRGenerator::incrementalModRefAnalysis()
     SVFUtil::outs() << "Globs and Deletion Globs Recomputation Starts...\n";
     double globStart = stat->getClk();
     allGlobals_t = allGlobals;
-    allGlobals.clear();
-    collectGlobals();
+    if (hasPtsChange(allGlobals)) {
+        allGlobals.clear();
+        collectGlobals();       
+    }
     dGlobs = allGlobals_t - allGlobals;
     double globEnd = stat->getClk();
+    SVFUtil::outs() << "dGlobs.count(): " << dGlobs.count() << "\n";
     SVFUtil::outs() << "Time of Recompute Globs: " << (globEnd - globStart) / TIMEINTERVAL << "\n";
 
     // 3. recompute argspts/retspts and get del argspts/retspts
@@ -695,6 +705,9 @@ void MRGenerator::incrementalModRefAnalysis()
 
     double incEnd = stat->getClk();
     SVFUtil::outs() << "Mod Ref (All): " << (incEnd - incStart)/TIMEINTERVAL << "\n";
+    
+    if (Options::wjydebug())
+        debugdump();
 }
 /*!
  * Generate memory regions for calls
@@ -734,7 +747,7 @@ void MRGenerator::collectModRefForCall()
     double mrEnd = stat->getClk(true);
     SVFUtil::outs() << "Mod Ref (collectModRefForCall): " << (mrEnd - mrStart)/TIMEINTERVAL << "\n";
 
-    // timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
+    timeOfModRefAnalysis += (mrEnd - mrStart)/TIMEINTERVAL;
 
     DBOUT(DGENERAL, outs() << pasMsg("\t\tAdd PointsTo to Callsites \n"));
 
@@ -932,7 +945,7 @@ void MRGenerator::addRefSideEffectOfFunction_loadStore_inc(const SVFFunction* fu
     for(NodeBS::iterator it = refs.begin(), eit = refs.end(); it!=eit; ++it)
     {
         if(isNonLocalObject(*it,fun)) {
-            // funToRefsMap[fun].set(*it);
+            funToRefsMap[fun].set(*it); // 1.19
             funToRefsMap_ls[fun].set(*it);
         }
     }
@@ -989,7 +1002,7 @@ void MRGenerator::addModSideEffectOfFunction_loadStore_inc(const SVFFunction* fu
     for(NodeBS::iterator it = mods.begin(), eit = mods.end(); it!=eit; ++it)
     {
         if(isNonLocalObject(*it,fun)) {
-            // funToModsMap[fun].set(*it);
+            funToModsMap[fun].set(*it); // 1.19
             funToModsMap_ls[fun].set(*it);
         }
     }

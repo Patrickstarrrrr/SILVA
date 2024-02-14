@@ -37,6 +37,8 @@ using namespace SVFUtil;
 
 double MemSSA::timeOfGeneratingMRStep1 = 0;
 double MemSSA::timeOfGeneratingMRStep2 = 0;
+double MemSSA::timeOfIncMRARound1 = 0;
+double MemSSA::timeOfIncMRARound2 = 0;
 double MemSSA::timeOfGeneratingMemRegions = 0;	///< Time for allocating regions
 double MemSSA::timeOfCreateMUCHI  = 0;	///< Time for generating mu/chi for load/store/calls
 double MemSSA::timeOfInsertingPHI  = 0;	///< Time for inserting phis
@@ -80,7 +82,13 @@ MemSSA::MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA)
 }
 void MemSSA::generate_inc()
 {
+    double incStart = stat->getClk(true);
     mrGen->incrementalModRefAnalysis();
+    double incEnd = stat->getClk(true);
+    if (timeOfIncMRARound1 == 0)
+        timeOfIncMRARound1 = (incEnd - incStart)/TIMEINTERVAL;
+    else
+        timeOfIncMRARound2 = (incEnd - incStart)/TIMEINTERVAL;
 }
 void MemSSA::generate_step2()
 {

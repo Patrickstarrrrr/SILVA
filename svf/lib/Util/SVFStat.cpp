@@ -193,7 +193,7 @@ void SVFStat::performStat()
     timeStatMap["LLVMIRTime"] = SVFStat::timeOfBuildingLLVMModule;
     timeStatMap["SymbolTableTime"] = SVFStat::timeOfBuildingSymbolTable;
     timeStatMap["SVFIRTime"] = SVFStat::timeOfBuildingSVFIR;
-
+    timeStatMap["IRTotalTime"] = timeStatMap["LLVMIRTime"] + timeStatMap["SymbolTableTime"] + timeStatMap["SVFIRTime"];
     // REFACTOR-TODO bitcastInstStat();
     branchStat();
 

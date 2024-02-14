@@ -43,7 +43,6 @@ u32_t AndersenIncStat::_NumOfNodesInCycles = 0;
 u32_t AndersenIncStat::_MaxNumOfNodesInSCC = 0;
 
 const char* AndersenIncStat::CollapseTime = "CollapseTime";
-
 /*!
  * Constructor
  */
@@ -333,7 +332,8 @@ void AndersenIncStat::performStat()
     timeStatMap["SCCDetectTime"] = AndersenInc::timeOfSCCDetection;
     timeStatMap["SCCMergeTime"] =  AndersenInc::timeOfSCCMerges;
     timeStatMap[CollapseTime] =  AndersenInc::timeOfCollapse;
-
+    timeStatMap["CollapsePWCTime"] = AndersenInc::timeOfCollapsePWC;
+    
     timeStatMap["LoadStoreTime"] =  AndersenInc::timeOfProcessLoadStore;
     timeStatMap["CopyGepTime"] =  AndersenInc::timeOfProcessCopyGep;
     timeStatMap["UpdateCGTime"] =  AndersenInc::timeOfUpdateCallGraph;

@@ -1065,4 +1065,10 @@ const Option<bool> Options::irdiff(
     false
 );
 
+const Option<bool> Options::wjydebug(
+    "wjydebug", 
+    "wjy is debugging",
+    false
+);
+
 } // namespace SVF.

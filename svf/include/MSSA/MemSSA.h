@@ -106,6 +106,8 @@ public:
     //@{
     static double timeOfGeneratingMRStep1;
     static double timeOfGeneratingMRStep2;
+    static double timeOfIncMRARound1;
+    static double timeOfIncMRARound2;
     static double timeOfGeneratingMemRegions;	///< Time for allocating regions
     static double timeOfCreateMUCHI;	///< Time for generating mu/chi for load/store/calls
     static double timeOfInsertingPHI;	///< Time for inserting phis

@@ -156,6 +156,37 @@ void WPAPass::runPointerAnalysis(SVFIR* pag, u32_t kind)
                 _svfg = svfg;
 
         }
+        else {
+            // SVFGBuilder svfgBuilder(true);
+            // std::unique_ptr<MemSSA> mssa = svfgBuilder.buildFullSVFG_step1((BVDataPTAImpl*)_pta);
+            
+            if (Options::IsNew()) {
+                SVFUtil::outs() << "Reset strat...\n";
+                // incremental pointer analysis
+                ((AndersenInc*)_pta)->analyze_inc_reset();
+                // incremental mod-ref analysis
+                // mssa->generate_inc();
+                SVFUtil::outs() << "Reset end.\n";
+
+                // incremental pointer analysis
+                ((AndersenInc*)_pta)->analyze_inc();
+                // incremental mod-ref analysis
+                // mssa->generate_inc();
+            }
+            else {
+                // incremental pointer analysis
+                ((AndersenInc*)_pta)->analyze_inc();
+                // incremental mod-ref analysis
+                // mssa->generate_inc();
+            }
+            
+            
+            // SVFG *svfg = svfgBuilder.buildFullSVFG_step2((BVDataPTAImpl*)_pta, std::move(mssa));
+
+            /// support mod-ref queries only for -ander
+            // if (Options::PASelected(PointerAnalysis::AndersenWaveDiff_WPA))
+            //     _svfg = svfg;
+        }
     }
     else {
         if (Options::AnderSVFG())

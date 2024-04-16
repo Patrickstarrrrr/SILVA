@@ -307,6 +307,9 @@ public:
     static const Option<bool> irdiff;
     static const Option<bool> wjydebug;
     /// for ir diff
+
+    /// for ipa
+    static const Option<bool> IPA;
     
 };
 }  // namespace SVF

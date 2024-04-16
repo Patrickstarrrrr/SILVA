@@ -1,6 +1,7 @@
 #ifndef INCLUDE_WPA_ANDERSENINC_H_
 #define INCLUDE_WPA_ANDERSENINC_H_
 
+#include <unordered_map>
 #define STAT_TIME(timeOfFunc, ...) \
     do { \
         double dStartTime = stat->getClk(); \
@@ -379,6 +380,8 @@ private:
     FIFOWorkList<FConstraintEdge *> insPropWL;
 
     std::unordered_map<NodeID, PointsTo> insPropMap;
+    std::unordered_map<NodeID, PointsTo> delPropMap;
+
     std::unordered_set<NodeID> unFilterSet;
     std::vector<SDK*> insDirectConsVec;
     std::vector<SDK*> insEdgeVec;
@@ -431,25 +434,41 @@ private:
     //@{
     void processDeletion();
     void processDeletion_EdgeConstraint();
+    void processDeletion_EdgeConstraint_IPA();
+    void processDeletion_EdgeConstraint_Lazy();
     // void processSCCRemoveEdge(NodeID srcid, NodeID dstid, FConstraintEdge::FConstraintEdgeK kind);
     void processLoadRemoval(NodeID srcid, NodeID dstid);
     void processStoreRemoval(NodeID srcid, NodeID dstid);
+
     void processAddrRemoval(NodeID srcid, NodeID dstid);
+    void processAddrRemoval_IPA(NodeID srcid, NodeID dstid);
+    void processAddrRemoval_Lazy(NodeID srcid, NodeID dstid);
     
     void processCopyRemoval(NodeID srcid, NodeID dstid);
     void processCopyEdgeRemoval(NodeID srcid, NodeID dstid);
+    void processCopyEdgeRemoval_IPA(NodeID srcid, NodeID dstid);
+    void processCopyEdgeRemoval_Lazy(NodeID srcid, NodeID dstid);
     void processCopyConstraintRemoval(NodeID srcid, NodeID dstid);
+    void processCopyConstraintRemoval_Lazy(NodeID srcid, NodeID dstid);
 
     void processVariantGepRemoval(NodeID srcid, NodeID dstid);
     void processVariantGepEdgeRemoval(NodeID srcid, NodeID dstid);
+    void processVariantGepEdgeRemoval_IPA(NodeID srcid, NodeID dstid);
+    void processVariantGepEdgeRemoval_Lazy(NodeID srcid, NodeID dstid);
     void processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid);
+    void processVariantGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid);
 
     void processNormalGepRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processNormalGepEdgeRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepEdgeRemoval_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepEdgeRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap);
 
     void processSCCRedetection();
+    bool processSCCRedetection_IPA(NodeID rep);
     void propagateDelPts(const PointsTo& pts, NodeID nodeId);
+    void propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId);
 
     void initFpPDM();
     void computeFpPDM();

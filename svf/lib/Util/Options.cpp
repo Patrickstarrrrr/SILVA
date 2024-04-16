@@ -1071,4 +1071,10 @@ const Option<bool> Options::wjydebug(
     false
 );
 
+const Option<bool> Options::IPA(
+    "ipa", 
+    "is running ipa",
+    false
+);
+
 } // namespace SVF.

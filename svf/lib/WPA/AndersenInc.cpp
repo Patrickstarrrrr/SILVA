@@ -1,5 +1,7 @@
 #include "WPA/AndersenInc.h"
 #include "MemoryModel/PointsTo.h"
+#include "Graphs/SuperConsGEdge.h"
+#include "Graphs/SuperConsGNode.h"
 #include "Util/Options.h"
 #include "Graphs/CHG.h"
 #include "Util/SVFUtil.h"
@@ -166,7 +168,11 @@ void AndersenInc::analyze_inc()
     if (!Options::IsNew()) {
         SVFUtil::outs() << "Process deletion analysis:\n";
         double delStart = stat->getClk();
-        processDeletion_EdgeConstraint();
+        // processDeletion_EdgeConstraint();
+        if (Options::IPA())
+            processDeletion_EdgeConstraint_IPA();
+        else
+            processDeletion_EdgeConstraint_Lazy();
         double delEnd = stat->getClk();
         timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
         timeOfIncrementalPTA = timeOfDeletionPTA;
@@ -2003,6 +2009,57 @@ void AndersenInc::processAddrRemoval(NodeID srcid, NodeID dstid)
     srcSet.set(srcid);
     STAT_TIME(timeOfDeletionProp, propagateDelPts(srcSet, dstid));
 }
+/*
+ * s --Addr--> d
+ * pts(d) = pts(d) \Union {s}
+ */
+void AndersenInc::processAddrRemoval_IPA(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sAddr = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SAddr);
+
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fAddr = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FAddr);
+
+    sAddr->removeFEdge(fAddr);
+    if (sAddr->getFEdgeSet().empty()) {
+        sCG->removeAddrEdge(SVFUtil::dyn_cast<AddrSCGEdge>(sAddr));
+    }
+    
+    fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
+
+    PointsTo srcSet;
+    srcSet.set(srcid);
+    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(srcSet, dstid));
+}
+/*
+ * s --Addr--> d
+ * pts(d) = pts(d) \Union {s}
+ */
+void AndersenInc::processAddrRemoval_Lazy(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sAddr = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SAddr);
+
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fAddr = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FAddr);
+
+    sAddr->removeFEdge(fAddr);
+    if (sAddr->getFEdgeSet().empty()) {
+        sCG->removeAddrEdge(SVFUtil::dyn_cast<AddrSCGEdge>(sAddr));
+    }
+    
+    fCG->removeAddrEdge(SVFUtil::dyn_cast<AddrFCGEdge>(fAddr));
+
+    PointsTo srcSet;
+    srcSet.set(srcid);
+    delPropMap[dstid] |= srcSet; // collect changes
+}
+
 
 void AndersenInc::processSCCRedetection()
 {
@@ -2069,6 +2126,37 @@ void AndersenInc::processSCCRedetection()
     }
 }
 
+bool AndersenInc::processSCCRedetection_IPA(NodeID rep)
+{
+    NodeID oldRep = rep;
+    NodeBS newReps;
+    const PointsTo& oldRepPts = getPts(oldRep);
+    double sccStart = stat->getClk();
+    unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
+    double sccEnd = stat->getClk();
+    timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+    if (1 == sccKeep) {
+        return false;
+    }
+    else {
+        // SCC Restore
+        SCCBreak = true;
+        for (NodeID id: newReps)
+            unionPts(id, oldRepPts);
+        return true;
+        // for (SDK* sdk: rep2EdgeSet[oldRep]) {
+        //     if (sCG->getSConstraintNode(sdk->src) == sCG->getSConstraintNode(sdk->dst)) {
+        //         delete sdk;
+        //         continue;
+        //     }
+        //     delEdgeVec.push_back(sdk);
+        // }
+        // rep2EdgeSet[oldRep].clear();
+    }
+    // }
+}
+
+
 void AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid)
 {
     FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
@@ -2111,10 +2199,101 @@ void AndersenInc::processCopyEdgeRemoval(NodeID srcid, NodeID dstid)
         }
     }
 }
+void AndersenInc::processCopyEdgeRemoval_Lazy(NodeID srcid, NodeID dstid)
+{
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fCopy = fCG->getFEdgeOrNullptr(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+    if (fCopy == nullptr)
+        return;
+    CopyFCGEdge* copyFCGEdge = SVFUtil::dyn_cast<CopyFCGEdge>(fCopy);
+    if (! copyFCGEdge->getComplexEdgeSet().empty()) {
+        // Copy not by complex constraint
+        // Process the complexEdgeSet here
+        // Copy by complex constraint
+        // The complexEdgeSet has already been processed when handle load/store
+
+        // not empty, original copy removal (remove self complex constraint)
+        copyFCGEdge->removeComplexEdge(fCopy);
+        if (! copyFCGEdge->getComplexEdgeSet().empty())
+            return; // do nothing if the complex set is still not empty
+    }
+    // The complex set is empty, then the copyEdge should be removed.
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
+    sCopy->removeFEdge(fCopy);
+    fCG->removeDirectEdge(fCopy);
+    if (sSrcNode == sDstNode) {
+        // Copy Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        redetectReps.push(repId);
+        rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+        sCG->removeTempGEdge(srcid , dstid, FConstraintEdge::FCopy);
+        return;
+    }
+    else {
+        // Copy Edge not in SCC
+        if (sCopy->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sCopy);
+            // delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+            // return;
+            processCopyConstraintRemoval_Lazy(srcid, dstid);
+        }
+    }
+}
+void AndersenInc::processCopyEdgeRemoval_IPA(NodeID srcid, NodeID dstid)
+{
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fCopy = fCG->getFEdgeOrNullptr(fSrcNode, fDstNode, FConstraintEdge::FCopy);
+    if (fCopy == nullptr)
+        return;
+    CopyFCGEdge* copyFCGEdge = SVFUtil::dyn_cast<CopyFCGEdge>(fCopy);
+    if (! copyFCGEdge->getComplexEdgeSet().empty()) {
+        // Copy not by complex constraint
+        // Process the complexEdgeSet here
+        // Copy by complex constraint
+        // The complexEdgeSet has already been processed when handle load/store
+
+        // not empty, original copy removal (remove self complex constraint)
+        copyFCGEdge->removeComplexEdge(fCopy);
+        if (! copyFCGEdge->getComplexEdgeSet().empty())
+            return; // do nothing if the complex set is still not empty
+    }
+    // The complex set is empty, then the copyEdge should be removed.
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sCopy = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SCopy);
+    sCopy->removeFEdge(fCopy);
+    fCG->removeDirectEdge(fCopy);
+    if (sSrcNode == sDstNode) {
+        // Copy Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        bool prop = processSCCRedetection_IPA(repId);
+        if (prop) {
+            processCopyConstraintRemoval(srcid, dstid);
+        }
+        return;
+    }
+    else {
+        // Copy Edge not in SCC
+        if (sCopy->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sCopy);
+            // IPA propagate changes eagerly
+            processCopyConstraintRemoval(srcid, dstid);
+            return;
+        }
+    }
+}
 
 void AndersenInc::processCopyConstraintRemoval(NodeID srcid, NodeID dstid)
 {
     STAT_TIME(timeOfDeletionProp, propagateDelPts(getPts(srcid), dstid));
+}
+void AndersenInc::processCopyConstraintRemoval_Lazy(NodeID srcid, NodeID dstid)
+{
+    delPropMap[dstid] |= getPts(srcid);
 }
 /*
  * s --Copy--> d
@@ -2203,6 +2382,64 @@ void AndersenInc::processVariantGepEdgeRemoval(NodeID srcid, NodeID dstid)
         }
     }
 }
+void AndersenInc::processVariantGepEdgeRemoval_Lazy(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sVGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SVariantGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fVGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FVariantGep);
+    sVGep->removeFEdge(fVGep);
+    fCG->removeDirectEdge(fVGep);
+    if (sSrcNode == sDstNode) {
+        // Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        redetectReps.push(repId);
+        rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
+        sCG->removeTempGEdge(srcid , dstid, FConstraintEdge::FVariantGep);
+        return;
+    }
+    else {
+        // Edge not in SCC
+        if (sVGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sVGep);
+            // delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
+            // return;
+            processVariantGepConstraintRemoval_Lazy(srcid, dstid);
+        }
+    }
+}
+void AndersenInc::processVariantGepEdgeRemoval_IPA(NodeID srcid, NodeID dstid)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sVGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SVariantGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fVGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FVariantGep);
+    sVGep->removeFEdge(fVGep);
+    fCG->removeDirectEdge(fVGep);
+    if (sSrcNode == sDstNode) {
+        // Copy Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        bool prop = processSCCRedetection_IPA(repId);
+        if (prop) {
+            processVariantGepConstraintRemoval(srcid, dstid);
+        }
+        return;
+    }
+    else {
+        // Copy Edge not in SCC
+        if (sVGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sVGep);
+            // IPA propagate changes eagerly
+            processVariantGepConstraintRemoval(srcid, dstid);
+            return;
+        }
+    }
+}
+
 
 void AndersenInc::processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid)
 {
@@ -2218,6 +2455,22 @@ void AndersenInc::processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid)
         tmpPts.set(baseId);
     }
     STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+}
+void AndersenInc::processVariantGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid)
+{
+    PointsTo tmpPts;
+    for (NodeID o: getPts(srcid)) {
+        if (sCG->isBlkObjOrConstantObj(o))
+        {
+            tmpPts.set(o);
+            continue;
+        }
+
+        NodeID baseId = sCG->getFIObjVar(o);
+        tmpPts.set(baseId);
+    }
+    // STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    delPropMap[dstid] |= tmpPts;
 }
 /*
  * s --VGep--> d
@@ -2326,6 +2579,63 @@ void AndersenInc::processNormalGepEdgeRemoval(NodeID srcid, NodeID dstid, const 
         }
     }
 }
+void AndersenInc::processNormalGepEdgeRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sNGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SNormalGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fNGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FNormalGep);
+    sNGep->removeFEdge(fNGep);
+    fCG->removeDirectEdge(fNGep);
+    if (sSrcNode == sDstNode) {
+        // Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        redetectReps.push(repId);
+        rep2EdgeSet[repId].insert(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+        sCG->removeTempGEdge(srcid , dstid, FConstraintEdge::FNormalGep);
+        return;
+    }
+    else {
+        // Edge not in SCC
+        if (sNGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sNGep);
+            // delEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+            // return;
+            processNormalGepConstraintRemoval_Lazy(srcid, dstid, ap);
+        }
+    }
+}
+void AndersenInc::processNormalGepEdgeRemoval_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    SConstraintNode* sSrcNode = sCG->getSConstraintNode(srcid);
+    SConstraintNode* sDstNode = sCG->getSConstraintNode(dstid);
+    SConstraintEdge* sNGep = sCG->getEdge(sSrcNode, sDstNode, SConstraintEdge::SNormalGep);
+    FConstraintNode* fSrcNode = fCG->getFConstraintNode(srcid);
+    FConstraintNode* fDstNode = fCG->getFConstraintNode(dstid);
+    FConstraintEdge* fNGep = fCG->getEdge(fSrcNode, fDstNode, FConstraintEdge::FNormalGep);
+    sNGep->removeFEdge(fNGep);
+    fCG->removeDirectEdge(fNGep);
+    if (sSrcNode == sDstNode) {
+        // Copy Edge in SCC
+        NodeID repId = sSrcNode->getId();
+        bool prop = processSCCRedetection_IPA(repId);
+        if (prop) {
+            processNormalGepConstraintRemoval(srcid, dstid, ap);
+        }
+        return;
+    }
+    else {
+        // Copy Edge not in SCC
+        if (sNGep->getFEdgeSet().empty()) {
+            sCG->removeDirectEdge(sNGep);
+            // IPA propagate changes eagerly
+            processNormalGepConstraintRemoval(srcid, dstid, ap);
+            return;
+        }
+    }
+}
 
 void AndersenInc::processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, const AccessPath& ap)
 {
@@ -2341,6 +2651,22 @@ void AndersenInc::processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, 
         tmpPts.set(fieldSrcPtdNode);
     }
     STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+}
+void AndersenInc::processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    PointsTo tmpPts;
+    for (NodeID o : getPts(srcid))
+    {
+        if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+        {
+            tmpPts.set(o);
+            continue;
+        }
+        NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+        tmpPts.set(fieldSrcPtdNode);
+    }
+    // STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    delPropMap[dstid] |= tmpPts;
 }
 
 /*
@@ -2431,7 +2757,15 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
     // Filter 1: dPts = dPts \intersect pts(nodeId)
     const PointsTo& nodePts = getPts(nodeId);
     dPts &= nodePts;
-    
+    PointsTo inAddr;
+    for (auto it = node->incomingAddrsBegin(), eit = node->incomingAddrsEnd();
+        it != eit; ++it)
+    {
+        const SConstraintEdge* incomingAddr = *it;
+        NodeID src = incomingAddr->getSrcID();
+        inAddr.set(src);
+    }
+    dPts -= inAddr;
     // Filter 2: incoming neighbors check
     for (auto it = node->directInEdgeBegin(), eit = node->directInEdgeEnd();
         it != eit; ++it)
@@ -2558,6 +2892,318 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
     }
 }
 
+// TODO: --wjy
+void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
+{
+    if (pts.empty()) {
+        return;
+    }
+    
+    SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    nodeId = node->getId();
+    PointsTo dPts; // objs need to be removed from pts(nodeId)
+    dPts |= pts;
+
+    // Filter 1: dPts = dPts \intersect pts(nodeId)
+    const PointsTo& nodePts = getPts(nodeId);
+    dPts &= nodePts;
+    
+    PointsTo inAddr;
+    for (auto it = node->incomingAddrsBegin(), eit = node->incomingAddrsEnd();
+        it != eit; ++it)
+    {
+        const SConstraintEdge* incomingAddr = *it;
+        NodeID src = incomingAddr->getSrcID();
+        inAddr.set(src);
+    }
+    dPts -= inAddr;
+    // Filter 2: incoming neighbors check
+    for (auto it = node->directInEdgeBegin(), eit = node->directInEdgeEnd();
+        it != eit; ++it)
+    {
+        if (dPts.empty()){
+            return;
+        }
+
+        const SConstraintEdge* incomingEdge = *it;
+        NodeID src = incomingEdge->getSrcID();
+        const PointsTo & srcPts = getPts(src);
+
+        if (SVFUtil::isa<CopySCGEdge>(incomingEdge)) {
+            dPts -= srcPts;
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(incomingEdge)) {
+            for (NodeID o: srcPts) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                    dPts.reset(o);
+                else 
+                    dPts.reset(sCG->getFIObjVar(o));
+            }
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(incomingEdge)) {
+            const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(incomingEdge);
+            for (NodeID o: srcPts) {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                    dPts.reset(o);
+                else {
+                    const AccessPath& ap = ngep->getAccessPath();
+                    NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                    dPts.reset(fieldSrcPtdNode);
+                }
+            }
+        }
+    }
+
+    // pts(nodeId) = pts(nodeId) - dPts
+    for (NodeID o: dPts) {
+        clearPts(nodeId, o);
+    }
+
+    // process outgoing neighbor propagate
+    for (auto it = node->directOutEdgeBegin(), eit = node->directOutEdgeEnd();
+        it != eit; ++it)
+    {
+        const SConstraintEdge* outSEdge = *it;
+        NodeID dstId = outSEdge->getDstID();
+        if (dstId == nodeId)
+            continue; // self circle edge
+        if (SVFUtil::isa<CopySCGEdge>(outSEdge)) {
+            propagateDelPts_IPA(dPts, dstId);
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(outSEdge)) {
+            PointsTo vgepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                    vgepProPts.set(o);
+                else
+                    vgepProPts.set(sCG->getFIObjVar(o));
+            }
+            propagateDelPts_IPA(vgepProPts, dstId);
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(outSEdge)) {
+            const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(outSEdge);
+            PointsTo ngepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                    ngepProPts.set(o);
+                else {
+                    const AccessPath& ap = ngep->getAccessPath();
+                    NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                    ngepProPts.set(fieldSrcPtdNode);
+                }
+            }
+            propagateDelPts_IPA(ngepProPts, dstId);
+        }
+    }
+
+    // process complex constraint 
+    for (NodeID o: dPts) {
+        if (pag->isConstantObj(o) || isNonPointerObj(o))
+            continue;
+
+        FConstraintNode* oNode = fCG->getFConstraintNode(o);
+
+        // load complex constraint
+        for (auto it = node->outgoingLoadsBegin(), eit = node->outgoingLoadsEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sLoad = *it;
+            for (FConstraintEdge* fLoad: sLoad->getFEdgeSet()) 
+            {
+                FConstraintNode* loadDstNode = fLoad->getDstNode();
+                if (!fCG->hasEdge(oNode, loadDstNode, FConstraintEdge::FCopy))
+                    continue;
+                FConstraintEdge* fEdge = fCG->getEdge(oNode, loadDstNode, FConstraintEdge::FCopy);
+                CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+                fCopy->removeComplexEdge(fLoad);
+                if (fCopy->getComplexEdgeSet().empty())
+                    // pushIntoDelEdgesWL(o, fLoad->getDstID(), FConstraintEdge::FCopy); -- newwl
+                    delDirectEdgeVec.push_back(new SDK(o, fLoad->getDstID(), FConstraintEdge::FCopy));
+            }
+        }
+
+        // store complex constraint
+        for (auto it = node->incomingStoresBegin(), eit = node->incomingStoresEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sStore = *it;
+            for (FConstraintEdge* fStore: sStore->getFEdgeSet()) 
+            {
+                FConstraintNode* storeSrcNode = fStore->getSrcNode();
+                if (!fCG->hasEdge(storeSrcNode, oNode, FConstraintEdge::FCopy))
+                    continue;
+                FConstraintEdge* fEdge = fCG->getEdge(storeSrcNode, oNode, FConstraintEdge::FCopy);
+                CopyFCGEdge* fCopy = SVFUtil::dyn_cast<CopyFCGEdge>(fEdge);
+                fCopy->removeComplexEdge(fStore);
+                if (fCopy->getComplexEdgeSet().empty())
+                    // pushIntoDelEdgesWL(fStore->getSrcID(), o, FConstraintEdge::FCopy); -- newwl
+                    delDirectEdgeVec.push_back(new SDK(fStore->getSrcID(), o, FConstraintEdge::FCopy));
+            }
+        }
+    }
+}
+
+void AndersenInc::processDeletion_EdgeConstraint_IPA()
+{
+    initFpPDM();
+    SCCBreak = false;
+    bool newCallCopyEdge = false;
+    // bool needSCCDetect = false;
+
+    // IPA: 1. prosess complex edge to extract direct edge
+    while (! delEdgeVec.empty()) {
+        SDK* sdk = delEdgeVec.back();
+        delEdgeVec.pop_back();
+
+        NodeID src = sdk->src;
+        NodeID dst = sdk->dst;
+        FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+        if (kind == FConstraintEdge::FAddr) {
+            processAddrRemoval_IPA(src, dst);
+        }
+        else if (kind == FConstraintEdge::FStore) {
+            processStoreRemoval(src, dst);
+        }
+        else if (kind == FConstraintEdge::FLoad) {
+            processLoadRemoval(src, dst);
+        }
+        delete sdk;
+    }
+
+    // IPA: 2. process direct edge
+    do {
+        newCallCopyEdge = false;
+        // needSCCDetect = false;
+        int delDirectEdgeCount = 0, delEdgeCount = 0;
+        while (! delDirectEdgeVec.empty()) {
+            SDK* sdk = delDirectEdgeVec.back();
+            delDirectEdgeVec.pop_back();
+            delDirectEdgeCount++;
+            NodeID src = sdk->src;
+            NodeID dst = sdk->dst;
+            FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            if (kind == FConstraintEdge::FCopy)
+                // needSCCDetect |= 
+                processCopyEdgeRemoval_IPA(src, dst);
+            else if (kind == FConstraintEdge::FVariantGep) {
+                processVariantGepEdgeRemoval_IPA(src, dst);
+            }
+            else if (kind == FConstraintEdge::FNormalGep) {
+                const AccessPath& ap = sdk->ap;
+                processNormalGepEdgeRemoval_IPA(src, dst, ap);
+            }
+            delete sdk;
+        }
+        // SVFUtil::outs() << "Deleted DirectEdge Num: " << delDirectEdgeCount << "\n";
+
+        // processSCCRedetection();
+
+        // process simple and comlex constraint...
+
+        // SVFUtil::outs() << "Deleted Edge Num: " << delEdgeCount << "\n";
+
+        double fpstart = stat->getClk();
+        computeFpPDM();
+        double fpend = stat->getClk();
+        timeOfInsComputeFP += (fpend - fpstart) / TIMEINTERVAL;
+
+        if (updateCallGraphDel(getIndirectCallsites()))
+            newCallCopyEdge = true;
+        if (!delDirectEdgeVec.empty())
+            newCallCopyEdge = true;
+        // if (!delEdgeVec.empty())
+        //     newCallCopyEdge = true;
+
+    } while(newCallCopyEdge);
+    // sCG->cleanRep2TempG();
+}
+
+void AndersenInc::processDeletion_EdgeConstraint_Lazy()
+{
+    initFpPDM();
+    SCCBreak = false;
+    bool newCallCopyEdge = false;
+
+    // Lazy: 1.1 prosess complex edge to extract direct edge
+    while (! delEdgeVec.empty()) {
+        SDK* sdk = delEdgeVec.back();
+        delEdgeVec.pop_back();
+
+        NodeID src = sdk->src;
+        NodeID dst = sdk->dst;
+        FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+        if (kind == FConstraintEdge::FAddr) {
+            processAddrRemoval_Lazy(src, dst);
+        }
+        else if (kind == FConstraintEdge::FStore) {
+            processStoreRemoval(src, dst);
+        }
+        else if (kind == FConstraintEdge::FLoad) {
+            processLoadRemoval(src, dst);
+        }
+        delete sdk;
+    }
+
+    // Lazy: 1.2 process direct edge
+    do {
+        newCallCopyEdge = false;
+        // needSCCDetect = false;
+        int delDirectEdgeCount = 0, delEdgeCount = 0;
+        while (! delDirectEdgeVec.empty()) {
+            SDK* sdk = delDirectEdgeVec.back();
+            delDirectEdgeVec.pop_back();
+            delDirectEdgeCount++;
+            NodeID src = sdk->src;
+            NodeID dst = sdk->dst;
+            FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            if (kind == FConstraintEdge::FCopy)
+                // needSCCDetect |= 
+                processCopyEdgeRemoval_Lazy(src, dst);
+            else if (kind == FConstraintEdge::FVariantGep) {
+                processVariantGepEdgeRemoval_Lazy(src, dst);
+            }
+            else if (kind == FConstraintEdge::FNormalGep) {
+                const AccessPath& ap = sdk->ap;
+                processNormalGepEdgeRemoval_Lazy(src, dst, ap);
+            }
+            delete sdk;
+        }
+        // SVFUtil::outs() << "Deleted DirectEdge Num: " << delDirectEdgeCount << "\n";
+
+        // Lazy: 1.2 SCC detection
+        processSCCRedetection();
+
+        // Lazy: 3 change updating and propagation
+        // 2024.4 TODO: Topo order?
+        for (auto it = delPropMap.begin(), eit = delPropMap.end(); it != eit; ++it) {
+            NodeID dst = it->first;
+            PointsTo& pts = it->second;
+            // bool sccflag = unFilterSet.find(dst) != unFilterSet.end();
+            // if (sccflag)
+            //     unFilterSet.erase(dst);
+            STAT_TIME(timeOfDeletionProp, propagateDelPts(pts, dst));  
+            // delPropMap[dst].clear();
+        }
+        delPropMap.clear();
+    
+        
+        // Lazy: 4 function pointer
+        double fpstart = stat->getClk();
+        computeFpPDM();
+        double fpend = stat->getClk();
+        timeOfInsComputeFP += (fpend - fpstart) / TIMEINTERVAL;
+
+        if (updateCallGraphDel(getIndirectCallsites()))
+            newCallCopyEdge = true;
+        if (!delDirectEdgeVec.empty())
+            newCallCopyEdge = true;
+        if (!delEdgeVec.empty())
+            newCallCopyEdge = true;
+
+    } while(newCallCopyEdge);
+    sCG->cleanRep2TempG();
+}
+
 void AndersenInc::processDeletion_EdgeConstraint()
 {
     initFpPDM();
@@ -2640,6 +3286,8 @@ void AndersenInc::processDeletion_EdgeConstraint()
     } while(newCallCopyEdge);
     sCG->cleanRep2TempG();
 }
+
+
 void AndersenInc::processDeletion()
 {
     initFpPDM();

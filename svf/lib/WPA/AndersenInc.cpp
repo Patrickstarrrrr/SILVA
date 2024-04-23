@@ -192,7 +192,10 @@ void AndersenInc::analyze_inc()
     if (Options::IsNew()) {
         SVFUtil::outs() << "Process insertion analysis:\n";
         double insStart = stat->getClk();
-        processInsertion();
+        if (Options::IPA())
+            processInsertion_IPA();
+        else
+            processInsertion();
         double insEnd = stat->getClk();
         timeOfInsertionPTA += (insEnd - insStart) / TIMEINTERVAL;
         SVFUtil::outs() << "Time of insertion PTA: " << timeOfInsertionPTA << "\n";
@@ -3951,6 +3954,75 @@ void AndersenInc::processInsertion()
     } while (newCallCopyEdge);
 }
 
+void AndersenInc::processInsertion_IPA()
+{
+    initFpPDM();
+    bool newCallCopyEdge = false;
+    bool needSCCDetect = false;
+
+    // IPA 1: process complex edge to extract direct edge
+    while (!insEdgeVec.empty()) {
+            SDK* sdk = insEdgeVec.back();
+            insEdgeVec.pop_back();
+            
+            NodeID src = sdk->src;
+            NodeID dst = sdk->dst;
+            FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            // dumpSDK(src, dst, kind);
+            if (kind == FConstraintEdge::FAddr) {
+                processAddrAddition(src, dst);
+            }
+            else if (kind == FConstraintEdge::FStore) {
+                processStoreAddition(src, dst);
+            }
+            else if (kind == FConstraintEdge::FLoad) {
+                processLoadAddition(src, dst);
+            }
+            delete sdk;
+    }
+
+    // IPA 2: process direct edge
+    do {
+        newCallCopyEdge = false;
+        needSCCDetect = false;
+        int insDirectEdgeCount = 0, insEdgeCount = 0;
+        // process direct edge insertion
+        
+        while (!insDirectEdgeVec.empty()) {
+            SDK* sdk = insDirectEdgeVec.back();
+            insDirectEdgeVec.pop_back();
+            insDirectEdgeCount ++;
+            NodeID src = sdk->src;
+            NodeID dst = sdk->dst;
+            FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+            FConstraintEdge* compEdge = sdk->compEdge;
+            // dumpSDK(src, dst, kind);
+            if (kind == FConstraintEdge::FCopy)
+                processCopyAddition_IPA(src, dst, compEdge);
+            else if (kind == FConstraintEdge::FVariantGep)
+                processVariantGepAddition_IPA(src, dst);
+            else if (kind == FConstraintEdge::FNormalGep) {
+                const AccessPath& ap = sdk->ap;
+                processNormalGepAddition_IPA(src, dst, ap);
+            }
+            delete sdk;
+        }
+
+        double fpstart = stat->getClk();
+        computeFpPDM();
+        double fpend = stat->getClk();
+        timeOfInsComputeFP += (fpend - fpstart) / TIMEINTERVAL;
+
+        if (updateCallGraphIns(getIndirectCallsites()))
+            newCallCopyEdge = true;
+        if (!insDirectEdgeVec.empty())
+            newCallCopyEdge = true;
+        if (!insEdgeVec.empty())
+            newCallCopyEdge = true;
+    } while (newCallCopyEdge);
+}
+
+
 void AndersenInc::processAddrAddition(NodeID srcid, NodeID dstid)
 {
     fCG->addAddrFCGEdge(srcid, dstid);
@@ -3961,6 +4033,18 @@ void AndersenInc::processAddrAddition(NodeID srcid, NodeID dstid)
         PointsTo ptsChange;
         ptsChange.set(srcid);
         STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid));      
+    }
+}
+void AndersenInc::processAddrAddition_IPA(NodeID srcid, NodeID dstid)
+{
+    fCG->addAddrFCGEdge(srcid, dstid);
+    sCG->addAddrSCGEdge(srcid, dstid);
+
+    const PointsTo& dstPts = getPts(dstid);
+    if (!dstPts.test(srcid)) {
+        PointsTo ptsChange;
+        ptsChange.set(srcid);
+        STAT_TIME(timeOfInsertionProp, propagateInsPts_IPA(ptsChange, dstid));      
     }
 }
 
@@ -4042,6 +4126,21 @@ bool AndersenInc::processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdg
         // insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
     return newSEdge;
 }
+bool AndersenInc::processCopyAddition_IPA(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge)
+{
+    bool newFEdge = fCG->addCopyFCGEdge(srcid, dstid, complexEdge);
+    if (!newFEdge)
+        return false;
+    bool newSEdge = false;
+    newSEdge |= (nullptr != sCG->addCopySCGEdge(srcid, dstid, true));
+    if (newSEdge) {
+        // insDirectConsVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+        SCCDetect(); //2024.4 TODO
+        processCopyConstraintAddition_IPA(srcid, dstid);
+    }        
+        // insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+    return newSEdge;
+}
 
 bool AndersenInc::processVariantGepAddition(NodeID srcid, NodeID dstid)
 {
@@ -4054,6 +4153,19 @@ bool AndersenInc::processVariantGepAddition(NodeID srcid, NodeID dstid)
         insDirectConsVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FVariantGep));
     return newSEdge;
 }
+bool AndersenInc::processVariantGepAddition_IPA(NodeID srcid, NodeID dstid)
+{
+    bool newFEdge = fCG->addVariantGepFCGEdge(srcid, dstid);
+    if (!newFEdge)
+        return false;
+    bool newSEdge = false;
+    newSEdge |= (nullptr != sCG->addVariantGepSCGEdge(srcid, dstid));
+    if (newSEdge){
+        SCCDetect();
+        processVariantGepConstraintAddition_IPA(srcid, dstid);
+    }
+    return newSEdge;
+}
 
 bool AndersenInc::processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap)
 {
@@ -4062,18 +4174,44 @@ bool AndersenInc::processNormalGepAddition(NodeID srcid, NodeID dstid, const Acc
         return false;
     bool newSEdge = false;
     newSEdge |= (nullptr != sCG->addNormalGepSCGEdge(srcid, dstid, ap));
-    if (newSEdge)
+    if (newSEdge) {
         insDirectConsVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FNormalGep, ap));
+    }
+        
+    return newSEdge;
+}
+bool AndersenInc::processNormalGepAddition_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    bool newFEdge = fCG->addNormalGepFCGEdge(srcid, dstid, ap);
+    if (!newFEdge)
+        return false;
+    bool newSEdge = false;
+    newSEdge |= (nullptr != sCG->addNormalGepSCGEdge(srcid, dstid, ap));
+    if (newSEdge) {
+        SCCDetect();
+        processNormalGepConstraintAddition_IPA(srcid, dstid, ap);
+    }
+        
     return newSEdge;
 }
 
 void AndersenInc::processCopyConstraintAddition(NodeID srcid, NodeID dstid)
 {
-    dstid = sccRepNode(dstid);
-    insPropMap[dstid] |= getPts(srcid);
-    if (sccRepNode(srcid) == sccRepNode(dstid))
-        unFilterSet.insert(dstid);
+    NodeID repdst = sccRepNode(dstid);
+    PointsTo changePts = getPts(srcid);
+    changePts = changePts - getPts(repdst);
+    insPropMap[repdst] |= changePts;
+    if (sccRepNode(srcid) == repdst)
+        unFilterSet.insert(repdst);
     // STAT_TIME(timeOfInsertionProp, propagateInsPts(getPts(srcid), dstid, sccRepNode(srcid) == sccRepNode(dstid)));  
+}
+void AndersenInc::processCopyConstraintAddition_IPA(NodeID srcid, NodeID dstid)
+{
+    NodeID repdst = sccRepNode(dstid);
+    PointsTo changePts = getPts(srcid);
+    changePts = changePts - getPts(repdst);
+    // insPropMap[repdst] |= changePts;
+    propagateInsPts_IPA(changePts,  repdst, sccRepNode(srcid) == repdst); 
 }
 
 void AndersenInc::processVariantGepConstraintAddition(NodeID srcid, NodeID dstid)
@@ -4088,10 +4226,29 @@ void AndersenInc::processVariantGepConstraintAddition(NodeID srcid, NodeID dstid
         NodeID baseId = sCG->getFIObjVar(o);
         ptsChange.set(baseId);
     }
-    dstid = sccRepNode(dstid);
+    NodeID repdst = sccRepNode(dstid);
+    ptsChange = ptsChange - getPts(repdst);
     insPropMap[dstid] |= ptsChange;
-    if (sccRepNode(srcid) == sccRepNode(dstid))
-        unFilterSet.insert(dstid);
+    if (sccRepNode(srcid) == repdst)
+        unFilterSet.insert(repdst);
+    // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
+}
+
+void AndersenInc::processVariantGepConstraintAddition_IPA(NodeID srcid, NodeID dstid)
+{
+    PointsTo ptsChange;
+    for (NodeID o: getPts(srcid)) {
+        if (sCG->isBlkObjOrConstantObj(o))
+        {
+            ptsChange.set(o);
+            continue;
+        }
+        NodeID baseId = sCG->getFIObjVar(o);
+        ptsChange.set(baseId);
+    }
+    NodeID repdst = sccRepNode(dstid);
+    ptsChange = ptsChange - getPts(repdst);
+    propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst);
     // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
 }
 
@@ -4111,6 +4268,24 @@ void AndersenInc::processNormalGepConstraintAddition(NodeID srcid, NodeID dstid,
     insPropMap[dstid] |= ptsChange;
     if (sccRepNode(srcid) == sccRepNode(dstid))
         unFilterSet.insert(dstid);
+    // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
+}
+
+void AndersenInc::processNormalGepConstraintAddition_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap)
+{
+    PointsTo ptsChange;
+    for (NodeID o: getPts(srcid)) {
+        if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+        {
+            ptsChange.set(o);
+            continue;
+        }
+        NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+        ptsChange.set(fieldSrcPtdNode);
+    }
+    NodeID repdst = sccRepNode(dstid);
+    ptsChange = ptsChange - getPts(repdst);
+    propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst);
     // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
 }
 
@@ -4169,6 +4344,110 @@ void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameS
                 }
             }
             propagateInsPts(ngepProPts, dstId);
+        }
+    }
+
+    // process complex constraint
+    // bool newSEdge = false;
+    for (NodeID o: dPts) {
+        if (pag->isConstantObj(o) || isNonPointerObj(o))
+            continue;
+
+        // load complex constraint
+        for (auto it = node->outgoingLoadsBegin(), eit = node->outgoingLoadsEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sLoad = *it;
+            for (FConstraintEdge* fLoad: sLoad->getFEdgeSet()) 
+            {
+                if ( !(fLoad->getCompCache().test(o)) ) {
+                    NodeID loadDst = fLoad->getDstID();
+                    insDirectEdgeVec.push_back(new SDK(o, loadDst, FConstraintEdge::FCopy, fLoad));
+                }
+                // fCG->addCopyFCGEdge(o, loadDst, fLoad);
+                // newSEdge |= (nullptr != sCG->addCopySCGEdge(o, loadDst));
+                // insEdgeVec.push_back(
+                //     new SDK(o, loadDst, FConstraintEdge::FCopy, fLoad));
+            }
+        }
+
+        // store complex constraint
+        for (auto it = node->incomingStoresBegin(), eit = node->incomingStoresEnd();
+            it != eit; ++it)
+        {
+            const SConstraintEdge* sStore = *it;
+            for (FConstraintEdge* fStore: sStore->getFEdgeSet()) 
+            {
+                if ( !(fStore->getCompCache().test(o)) ) {
+                    NodeID storeSrc = fStore->getSrcID();
+                    insDirectEdgeVec.push_back(new SDK(storeSrc, o, FConstraintEdge::FCopy, fStore));
+                }
+                // fCG->addCopyFCGEdge(storeSrc, o, fStore);
+                // newSEdge |= (nullptr != sCG->addCopySCGEdge(storeSrc, o));
+                // insEdgeVec.push_back(
+                //     new SDK(storeSrc, o, FConstraintEdge::FCopy, fStore));
+            }
+        }
+    }
+    // if (newSEdge)
+        // SCCDetect();
+}
+
+void AndersenInc::propagateInsPts_IPA(const PointsTo& pts, NodeID nodeId, bool sameSCC)
+{
+    PointsTo oriPts, dPts;
+    oriPts |= pts;
+    dPts |= pts;
+    
+    if (!sameSCC) {
+        // Filter 1: dPts = dPts - (dPts \intersect pts(nodeId))
+        oriPts &= getPts(nodeId); // oriPts = dPts \intersect pts(nodeId)
+        dPts -= oriPts; // dPts = dPts - oriPts
+        if (dPts.empty()){
+            return;
+        }
+    }
+    
+    // pts(nodeId) = pts(nodeId) U dPts
+    SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+    nodeId = node->getId();
+    unionPts(nodeId, dPts); 
+
+    // process outgoing neighbor propagate
+    
+    for (auto it = node->directOutEdgeBegin(), eit = node->directOutEdgeEnd();
+        it != eit; ++it)
+    {
+        SConstraintEdge* outSEdge = *it;
+        NodeID dstId = outSEdge->getDstID();
+        if (dstId == nodeId)
+            continue; // self circle edge
+        if (SVFUtil::isa<CopySCGEdge>(outSEdge)) {
+            propagateInsPts_IPA(dPts, dstId);
+        }
+        else if (SVFUtil::isa<VariantGepSCGEdge>(outSEdge)) {
+            PointsTo vgepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o))
+                    vgepProPts.set(o);
+                else
+                    vgepProPts.set(sCG->getFIObjVar(o));
+            }
+            propagateInsPts_IPA(vgepProPts, dstId);
+        }
+        else if (SVFUtil::isa<NormalGepSCGEdge>(outSEdge)) {
+            const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(outSEdge);
+            PointsTo ngepProPts;
+            for (NodeID o: dPts) {
+                if (sCG->isBlkObjOrConstantObj(o) || isFieldInsensitive(o))
+                    ngepProPts.set(o);
+                else {
+                    const AccessPath& ap = ngep->getAccessPath();
+                    NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
+                    ngepProPts.set(fieldSrcPtdNode);
+                }
+            }
+            propagateInsPts_IPA(ngepProPts, dstId);
         }
     }
 

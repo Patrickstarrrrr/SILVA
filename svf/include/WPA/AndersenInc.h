@@ -499,16 +499,29 @@ private:
     /// handling insertion
     //@{
     void processInsertion();
+    void processInsertion_IPA();
+    // void processInsertion_Lazy(); // 2024.4 TODO
     bool processLoadAddition(NodeID srcid, NodeID dstid);
     bool processStoreAddition(NodeID srcid, NodeID dstid);
     void processAddrAddition(NodeID srcid, NodeID dstid); 
+    void processAddrAddition_IPA(NodeID srcid, NodeID dstid); 
     bool processCopyAddition(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge = nullptr);
+    bool processCopyAddition_IPA(NodeID srcid, NodeID dstid, FConstraintEdge* complexEdge = nullptr);
+    
     bool processVariantGepAddition(NodeID srcid, NodeID dstid);
+    bool processVariantGepAddition_IPA(NodeID srcid, NodeID dstid);
     bool processNormalGepAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    bool processNormalGepAddition_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void processCopyConstraintAddition(NodeID srcid, NodeID dstid);
+    void processCopyConstraintAddition_IPA(NodeID srcid, NodeID dstid);
+    // void processCopyConstraintAddition_IPA(NodeID srcid, NodeID dstid);
     void processVariantGepConstraintAddition(NodeID srcid, NodeID dstid);
+    void processVariantGepConstraintAddition_IPA(NodeID srcid, NodeID dstid);
     void processNormalGepConstraintAddition(NodeID srcid, NodeID dstid, const AccessPath& ap);
+    void processNormalGepConstraintAddition_IPA(NodeID srcid, NodeID dstid, const AccessPath& ap);
     void propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameSCC = false);
+    void propagateInsPts_IPA(const PointsTo& pts, NodeID nodeId, bool sameSCC = false);
+    // void propagateInsPts_Lazy(const PointsTo& pts, NodeID nodeId, bool sameSCC = false); // 2024.4 TODO
 
     bool updateCallGraphIns(const CallSiteToFunPtrMap& callsites);
     void onTheFlyCallGraphSolveIns(const CallSiteToFunPtrMap& callsites, CallEdgeMap& newEdges);

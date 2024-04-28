@@ -1077,4 +1077,10 @@ const Option<bool> Options::IPA(
     false
 );
 
+const Option<bool> Options::RR(
+    "rr", 
+    "is running reset-recompute-MRA",
+    false
+);
+
 } // namespace SVF.

@@ -83,7 +83,10 @@ MemSSA::MemSSA(BVDataPTAImpl* p, bool ptrOnlyMSSA)
 void MemSSA::generate_inc()
 {
     double incStart = stat->getClk(true);
-    mrGen->incrementalModRefAnalysis();
+    if (Options::RR())
+        mrGen->incrementalModRefAnalysis_RR();
+    else
+        mrGen->incrementalModRefAnalysis();
     double incEnd = stat->getClk(true);
     if (timeOfIncMRARound1 == 0)
         timeOfIncMRARound1 = (incEnd - incStart)/TIMEINTERVAL;

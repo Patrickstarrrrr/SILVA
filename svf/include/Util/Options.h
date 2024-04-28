@@ -310,7 +310,8 @@ public:
 
     /// for ipa
     static const Option<bool> IPA;
-    
+    /// for rr
+    static const Option<bool> RR;
 };
 }  // namespace SVF
 

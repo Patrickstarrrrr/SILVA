@@ -207,6 +207,9 @@ public:
 private:
     FunctionSet storeChangedFunctions;
     FunctionSet loadChangedFunctions;
+    NodeBS storeResetFunctions;
+    NodeBS loadResetFunctions;
+    NodeBS resetFunctions;
     FunctionSet mods_lsChangedFunctions;
     FunctionSet refs_lsChangedFunctions;
     void initChangedFunctions();
@@ -457,9 +460,10 @@ protected:
     virtual void collectModRefForLoadStore();
     void collectModRefForLoadStore_inc();
     void collectModRefForLoadStore_RR();
-
+    void resetModRefInfo_RR();
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
+    void collectModRefForCall_RR();
 public:
     void incrementalModRefAnalysis();
     void incrementalModRefAnalysis_RR();

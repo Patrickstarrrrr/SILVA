@@ -397,6 +397,63 @@ void MRGenerator::initChangedFunctions()
     }
 
 }
+void MRGenerator::initChangedFunctions_RR()
+{
+    initChangedFunctions();
+    WorkList storeWL;
+    WorkList loadWL;
+    WorkList storeResetFunctions;
+    WorkList loadResetFunctions;
+    for (auto it = storeChangedFunctions.begin(), eit = storeChangedFunctions.end();
+        it != eit; ++it)
+    {
+        const SVFFunction* f = *it;
+        const PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(f);
+        NodeID id = callGraphNode->getId();
+        storeWL.push(id);
+        storeResetFunctions.push(id);
+    }
+    for (auto it = loadChangedFunctions.begin(), eit = loadChangedFunctions.end();
+        it != eit; ++it)
+    {
+        const SVFFunction* f = *it;
+        const PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(f);
+        NodeID id = callGraphNode->getId();
+        loadWL.push(id);
+        loadResetFunctions.push(id);
+    }
+
+    while (!storeWL.empty()) {
+        NodeID callGraphNodeID = storeWL.pop();
+        PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
+        for(PTACallGraphNode::iterator it = callGraphNode->InEdgeBegin(), eit = callGraphNode->InEdgeEnd();
+            it!=eit; ++it)
+        {
+            PTACallGraphEdge* edge = *it;
+            NodeID callerID = edge->getSrcID();
+            if (storeResetFunctions.push(callerID))
+            {
+                storeWL.push(callerID);
+            }
+        }
+    }
+
+    while (!loadWL.empty()) {
+        NodeID callGraphNodeID = loadWL.pop();
+        PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
+        for(PTACallGraphNode::iterator it = callGraphNode->InEdgeBegin(), eit = callGraphNode->InEdgeEnd();
+            it!=eit; ++it)
+        {
+            PTACallGraphEdge* edge = *it;
+            NodeID callerID = edge->getSrcID();
+            if (loadResetFunctions.push(callerID))
+            {
+                loadWL.push(callerID);
+            }
+        }
+    }
+    
+}
 /*!
  * Generate memory regions for loads/stores
  */
@@ -519,6 +576,150 @@ void MRGenerator::collectModRefForLoadStore_inc()
     }
     SVFUtil::outs() << "Mods_ls changed functions num: " << mods_lsChangedFunctions.size() << "\n";
     SVFUtil::outs() << "Refs_ls changed functions num: " << refs_lsChangedFunctions.size() << "\n";
+}
+
+void MRGenerator::collectModRefForLoadStore_RR()
+{
+    mods_lsChangedFunctions.clear();
+    refs_lsChangedFunctions.clear();
+    SVFModule* svfModule = incpta->getModule();
+    for (auto fun: storeResetFunctions) {
+        
+    }
+    for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
+            ++fi)
+    {
+        const SVFFunction& fun = **fi;
+
+        /// if this function does not have any caller, then we do not care its MSSA
+        if (Options::IgnoreDeadFun() && fun.isUncalledFunction())
+            continue;
+        bool storeUnchanged = storeChangedFunctions.find(&fun) == storeChangedFunctions.end();
+        bool loadUnchanged = loadChangedFunctions.find(&fun) == loadChangedFunctions.end();
+        if (storeUnchanged && loadUnchanged)
+        {
+            // Do not handle unchanged function
+            // reset the funToPointsToMap of store/load unchanged function
+            funToPointsToMap[&fun].clear();
+            funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
+            continue;
+        }
+        // handle changed function
+        funToPointsToMap_ls[&fun].clear(); // clear funToPointsToMap_ls here
+        // 1. handle store changed function
+        if (!storeUnchanged) {
+            // 1.1 save old funToMods_ls and recompute funToMods_ls
+            NodeBS oldFunToMods_ls = funToModsMap_ls[&fun];
+            funToModsMap_ls[&fun].clear();
+            // 1.2 recompute funToMods
+            for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
+                    iter != eiter; ++iter)
+            {                
+                const SVFBasicBlock* bb = *iter;
+                for (SVFBasicBlock::const_iterator bit = bb->begin(), ebit = bb->end();
+                        bit != ebit; ++bit)
+                {
+                    const SVFInstruction* svfInst = *bit;
+                    SVFStmtList& pagEdgeList = getPAGEdgesFromInst(svfInst);
+                    for (SVFStmtList::iterator bit = pagEdgeList.begin(), ebit =
+                                pagEdgeList.end(); bit != ebit; ++bit)
+                    {
+                        const PAGEdge* inst = *bit;
+                        if (inst->isDeleted) //TODO: handle del inst? -- wjy
+                            continue;
+                        // pagEdgeToFunMap[inst] = &fun; 
+                        if (const StoreStmt *st = SVFUtil::dyn_cast<StoreStmt>(inst))
+                        {
+                            NodeBS cpts(incpta->getPts(st->getLHSVarID()).toNodeBS());
+                            // TODO: change this assertion check later when we have conditional points-to set
+                            if (cpts.empty())
+                                continue;
+                            assert(!cpts.empty() && "null pointer!!");
+                            addCPtsToStore_inc(cpts, st, &fun);
+                        }
+                    } // end for each inst in pagedgelist
+                } // end for each svfinst in bb
+            } // end for each bb in fun (end 1.2)
+
+            // 1.3 compare new/old funToMods_ls
+            NodeBS& newFunToMods_ls = funToModsMap_ls[&fun];
+            if (oldFunToMods_ls != newFunToMods_ls) {
+                mods_lsChangedFunctions.insert(&fun);
+                funToModsMap_ls_t[&fun] = oldFunToMods_ls;
+            }
+        }   // end if (!storeUnchanged)
+
+        // 2. handle changed function
+        if (!loadUnchanged) {
+            // 2.1. save old funToRefs and recompute funToRefs_ls
+            NodeBS oldFunToRefs_ls = funToRefsMap_ls[&fun];
+            funToRefsMap_ls[&fun].clear();
+
+            // 2.2 recompute funToRefs/funToMods
+            for (SVFFunction::const_iterator iter = fun.begin(), eiter = fun.end();
+                    iter != eiter; ++iter)
+            { 
+                const SVFBasicBlock* bb = *iter;
+                for (SVFBasicBlock::const_iterator bit = bb->begin(), ebit = bb->end();
+                        bit != ebit; ++bit)
+                {
+                    const SVFInstruction* svfInst = *bit;
+                    SVFStmtList& pagEdgeList = getPAGEdgesFromInst(svfInst);
+                    for (SVFStmtList::iterator bit = pagEdgeList.begin(), ebit =
+                                pagEdgeList.end(); bit != ebit; ++bit)
+                    {
+                        const PAGEdge* inst = *bit;
+                        if (inst->isDeleted) //TODO: handle del inst? -- wjy
+                            continue;
+                        // pagEdgeToFunMap[inst] = &fun; 
+                        if (const LoadStmt *ld = SVFUtil::dyn_cast<LoadStmt>(inst))
+                        {
+                            NodeBS cpts(incpta->getPts(ld->getRHSVarID()).toNodeBS());
+                            // TODO: change this assertion check later when we have conditional points-to set
+                            if (cpts.empty())
+                                continue;
+                            assert(!cpts.empty() && "null pointer!!");
+                            addCPtsToLoad_inc(cpts, ld, &fun);
+                        } 
+                    } // end for each inst in pagedgelist
+                } // end for each svfinst in bb
+            } // end for each bb in fun
+
+            // 2.3
+            NodeBS& newFunToRefs_ls = funToRefsMap_ls[&fun];
+            if (oldFunToRefs_ls != newFunToRefs_ls) {
+                refs_lsChangedFunctions.insert(&fun);
+                funToRefsMap_ls_t[&fun] = oldFunToRefs_ls;
+            }
+        } // end if (!loadUnchanged)
+        
+        // 3. reset the funToPointsToMap of changed function.
+        // the funToPointsToMap_ls is computed in addCPtsToStore/Load_inc
+        funToPointsToMap[&fun].clear();
+        funToPointsToMap[&fun] = funToPointsToMap_ls[&fun];
+    }
+    SVFUtil::outs() << "Mods_ls changed functions num: " << mods_lsChangedFunctions.size() << "\n";
+    SVFUtil::outs() << "Refs_ls changed functions num: " << refs_lsChangedFunctions.size() << "\n";
+}
+
+void MRGenerator::incrementalModRefAnalysis_RR()
+{
+    SVFUtil::outs() << "Incremental Mod Ref Analysis RR Starts...\n";
+    double incStart = stat->getClk();
+    incpta = dyn_cast<AndersenInc>(pta);
+    // 1. clear glob and recompute
+    cachedPtsChainMap.clear();
+    allGlobals.clear();
+    collectGlobals();
+
+    callGraphSCC->find();
+    
+    // 2. recollect mod-ref for loads/stores
+
+
+
+    double incEnd = stat->getClk();
+    SVFUtil::outs() << "Mod Ref (All): " << (incEnd - incStart)/TIMEINTERVAL << "\n";
 }
 
 void MRGenerator::incrementalModRefAnalysis()

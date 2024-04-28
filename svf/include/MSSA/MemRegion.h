@@ -210,6 +210,7 @@ private:
     FunctionSet mods_lsChangedFunctions;
     FunctionSet refs_lsChangedFunctions;
     void initChangedFunctions();
+    void initChangedFunctions_RR();
     
     BVDataPTAImpl* pta;
     AndersenInc* incpta;
@@ -455,11 +456,13 @@ protected:
     /// Generate regions for loads/stores
     virtual void collectModRefForLoadStore();
     void collectModRefForLoadStore_inc();
+    void collectModRefForLoadStore_RR();
 
     /// Generate regions for calls/rets
     virtual void collectModRefForCall();
 public:
     void incrementalModRefAnalysis();
+    void incrementalModRefAnalysis_RR();
 protected:
     /// Partition regions
     virtual void partitionMRs();

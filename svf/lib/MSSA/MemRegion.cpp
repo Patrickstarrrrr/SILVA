@@ -583,8 +583,8 @@ void MRGenerator::collectModRefForLoadStore_RR()
     mods_lsChangedFunctions.clear();
     refs_lsChangedFunctions.clear();
     SVFModule* svfModule = incpta->getModule();
-    for (auto fun: storeResetFunctions) {
-        
+    for (NodeID funid: storeResetFunctions) {
+        const SVFFunction* fun = callgraph;
     }
     for (SVFModule::const_iterator fi = svfModule->begin(), efi = svfModule->end(); fi != efi;
             ++fi)

@@ -3222,7 +3222,7 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
         computeFpPDM();
         double fpend = stat->getClk();
         timeOfInsComputeFP += (fpend - fpstart) / TIMEINTERVAL;
-
+        SVFUtil::outs()<< "Round" << round << "FP done.\n"; 
         if (updateCallGraphDel(getIndirectCallsites()))
             newCallCopyEdge = true;
         if (!delDirectEdgeVec.empty())
@@ -3232,6 +3232,7 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
 
     } while(newCallCopyEdge);
     sCG->cleanRep2TempG();
+    SVFUtil::outs()<< "Clean rep2tempg done.\n"; 
 }
 
 void AndersenInc::processDeletion_EdgeConstraint()

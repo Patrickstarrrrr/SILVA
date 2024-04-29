@@ -2131,8 +2131,22 @@ void AndersenInc::processSCCRedetection()
                     delete sdk;
                     continue;
                 }
-                delDirectEdgeVec.push_back(sdk);
+                // delDirectEdgeVec.push_back(sdk);
                 // deldiEdgeVec.push_back(sdk);
+                NodeID src = sdk->src;
+                NodeID dst = sdk->dst;
+                FConstraintEdge::FConstraintEdgeK kind = sdk->kind;
+                if (kind == FConstraintEdge::FCopy)
+                    // needSCCDetect |= 
+                    processCopyConstraintRemoval_Lazy(src, dst);
+                else if (kind == FConstraintEdge::FVariantGep) {
+                    processVariantGepConstraintRemoval_Lazy(src, dst);
+                }
+                else if (kind == FConstraintEdge::FNormalGep) {
+                    const AccessPath& ap = sdk->ap;
+                    processNormalGepConstraintRemoval_Lazy(src, dst, ap);
+                }
+                delete sdk;
             }
             rep2EdgeSet[oldRep].clear();
         }

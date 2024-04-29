@@ -3179,6 +3179,7 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
         newCallCopyEdge = false;
         // needSCCDetect = false;
         int delDirectEdgeCount = 0, delEdgeCount = 0;
+        SVFUtil::outs()<< "Round" << round << "begin ...\n"; 
         while (! delDirectEdgeVec.empty()) {
             SDK* sdk = delDirectEdgeVec.back();
             delDirectEdgeVec.pop_back();

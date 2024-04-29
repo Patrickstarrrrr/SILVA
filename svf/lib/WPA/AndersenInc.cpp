@@ -132,7 +132,11 @@ void AndersenInc::analyze_inc_reset()
     initAllPDM();
     SVFUtil::outs() << "Process deletion analysis(Reset):\n";
     double delStart = stat->getClk();
-    processDeletion_EdgeConstraint();
+    // processDeletion_EdgeConstraint();
+    if (Options::IPA())
+        processDeletion_EdgeConstraint_IPA();
+    else
+        processDeletion_EdgeConstraint_Lazy();
     double delEnd = stat->getClk();
     timeOfDeletionPTA +=  (delEnd - delStart) / TIMEINTERVAL;
     
@@ -4780,7 +4784,11 @@ void AndersenInc::singleIncremental(NodeID srcid, NodeID dstid, FConstraintEdge:
     
     double iptaStart = stat->getClk();
     // processDeletion(); -- newwl
-    processDeletion_EdgeConstraint();
+    if (Options::IPA())
+        processDeletion_EdgeConstraint_IPA();
+    else
+        processDeletion_EdgeConstraint_Lazy();
+    // processDeletion_EdgeConstraint();
     double iptaMid = stat->getClk();
     timeOfDeletionPTA += (iptaMid - iptaStart) / TIMEINTERVAL;
     // computeAllPDM();//

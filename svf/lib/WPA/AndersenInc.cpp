@@ -2,6 +2,7 @@
 #include "MemoryModel/PointsTo.h"
 #include "Graphs/SuperConsGEdge.h"
 #include "Graphs/SuperConsGNode.h"
+#include "SVFIR/SVFType.h"
 #include "Util/Options.h"
 #include "Graphs/CHG.h"
 #include "Util/SVFUtil.h"
@@ -206,7 +207,10 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
     }
 
+    double diffstart = stat->getClk();
     computeAllPDM();
+    double diffend = stat->getClk();
+    SVFUtil::outs() << "Time of Diff PTA: " << (diffend-diffstart)/TIMEINTERVAL << "\n";
     stat->performStat();
 }
 

@@ -2131,7 +2131,8 @@ void AndersenInc::processSCCRedetection()
                     delete sdk;
                     continue;
                 }
-                delEdgeVec.push_back(sdk);
+                delDirectEdgeVec.push_back(sdk);
+                // deldiEdgeVec.push_back(sdk);
             }
             rep2EdgeSet[oldRep].clear();
         }
@@ -2306,6 +2307,7 @@ void AndersenInc::processCopyConstraintRemoval(NodeID srcid, NodeID dstid)
 }
 void AndersenInc::processCopyConstraintRemoval_Lazy(NodeID srcid, NodeID dstid)
 {
+    dstid = sccRepNode(dstid);
     delPropMap[dstid] |= getPts(srcid);
 }
 /*
@@ -2484,6 +2486,7 @@ void AndersenInc::processVariantGepConstraintRemoval_Lazy(NodeID srcid, NodeID d
         tmpPts.set(baseId);
     }
     // STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    dstid = sccRepNode(dstid);
     delPropMap[dstid] |= tmpPts;
 }
 /*
@@ -2681,6 +2684,7 @@ void AndersenInc::processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID ds
         tmpPts.set(fieldSrcPtdNode);
     }
     // STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    dstid = sccRepNode(dstid);
     delPropMap[dstid] |= tmpPts;
 }
 
@@ -3167,9 +3171,11 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
         }
         delete sdk;
     }
-
+    SVFUtil::outs() << "Lazy 1 done.\n";
+    int round = 0;
     // Lazy: 1.2 process direct edge
     do {
+        round ++;
         newCallCopyEdge = false;
         // needSCCDetect = false;
         int delDirectEdgeCount = 0, delEdgeCount = 0;
@@ -3193,14 +3199,14 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
             delete sdk;
         }
         // SVFUtil::outs() << "Deleted DirectEdge Num: " << delDirectEdgeCount << "\n";
-
+        SVFUtil::outs()<< "Round" << round << "Lazy 2 done.\n"; 
         // Lazy: 1.2 SCC detection
         processSCCRedetection();
 
         // Lazy: 3 change updating and propagation
         // 2024.4 TODO: Topo order?
         for (auto it = delPropMap.begin(), eit = delPropMap.end(); it != eit; ++it) {
-            NodeID dst = it->first;
+            NodeID dst = sccRepNode(it->first);
             PointsTo& pts = it->second;
             // bool sccflag = unFilterSet.find(dst) != unFilterSet.end();
             // if (sccflag)
@@ -3209,7 +3215,7 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
             // delPropMap[dst].clear();
         }
         delPropMap.clear();
-    
+        SVFUtil::outs()<< "Round" << round << "Lazy 3 done.\n"; 
         
         // Lazy: 4 function pointer
         double fpstart = stat->getClk();
@@ -3221,8 +3227,8 @@ void AndersenInc::processDeletion_EdgeConstraint_Lazy()
             newCallCopyEdge = true;
         if (!delDirectEdgeVec.empty())
             newCallCopyEdge = true;
-        if (!delEdgeVec.empty())
-            newCallCopyEdge = true;
+        // if (!delEdgeVec.empty())
+        //     newCallCopyEdge = true;
 
     } while(newCallCopyEdge);
     sCG->cleanRep2TempG();

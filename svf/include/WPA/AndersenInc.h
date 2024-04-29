@@ -468,7 +468,7 @@ private:
     void processSCCRedetection();
     bool processSCCRedetection_IPA(NodeID rep);
     void propagateDelPts(const PointsTo& pts, NodeID nodeId);
-    void propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId);
+    void propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId, NodeBS& proping);
 
     void initFpPDM();
     void computeFpPDM();

@@ -2043,7 +2043,8 @@ void AndersenInc::processAddrRemoval_IPA(NodeID srcid, NodeID dstid)
 
     PointsTo srcSet;
     srcSet.set(srcid);
-    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(srcSet, dstid));
+    NodeBS proping;
+    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(srcSet, dstid, proping));
 }
 /*
  * s --Addr--> d
@@ -2300,7 +2301,8 @@ void AndersenInc::processCopyEdgeRemoval_IPA(NodeID srcid, NodeID dstid)
 
 void AndersenInc::processCopyConstraintRemoval(NodeID srcid, NodeID dstid)
 {
-    STAT_TIME(timeOfDeletionProp, propagateDelPts(getPts(srcid), dstid));
+    NodeBS proping;
+    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(getPts(srcid), dstid, proping));
 }
 void AndersenInc::processCopyConstraintRemoval_Lazy(NodeID srcid, NodeID dstid)
 {
@@ -2465,7 +2467,8 @@ void AndersenInc::processVariantGepConstraintRemoval(NodeID srcid, NodeID dstid)
         NodeID baseId = sCG->getFIObjVar(o);
         tmpPts.set(baseId);
     }
-    STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    NodeBS proping;
+    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(tmpPts, dstid, proping));
 }
 void AndersenInc::processVariantGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid)
 {
@@ -2661,7 +2664,8 @@ void AndersenInc::processNormalGepConstraintRemoval(NodeID srcid, NodeID dstid, 
         NodeID fieldSrcPtdNode = sCG->getGepObjVar(o, ap.getConstantFieldIdx());
         tmpPts.set(fieldSrcPtdNode);
     }
-    STAT_TIME(timeOfDeletionProp, propagateDelPts(tmpPts, dstid));
+    NodeBS proping;
+    STAT_TIME(timeOfDeletionProp, propagateDelPts_IPA(tmpPts, dstid, proping));
 }
 void AndersenInc::processNormalGepConstraintRemoval_Lazy(NodeID srcid, NodeID dstid, const AccessPath& ap)
 {
@@ -2904,14 +2908,20 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
 }
 
 // TODO: --wjy
-void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
+void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId, NodeBS& proping)
 {
     if (pts.empty()) {
         return;
     }
-    
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
+
     nodeId = node->getId();
+    if (proping.test(nodeId)) {
+        SVFUtil::outs() << "node " << nodeId << "in a cycle!\n";
+        return;
+    }
+    proping.set(nodeId);
+
     PointsTo dPts; // objs need to be removed from pts(nodeId)
     dPts |= pts;
 
@@ -2933,6 +2943,7 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
         it != eit; ++it)
     {
         if (dPts.empty()){
+            proping.reset(nodeId);
             return;
         }
 
@@ -2979,7 +2990,7 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
         if (dstId == nodeId)
             continue; // self circle edge
         if (SVFUtil::isa<CopySCGEdge>(outSEdge)) {
-            propagateDelPts_IPA(dPts, dstId);
+            propagateDelPts_IPA(dPts, dstId, proping);
         }
         else if (SVFUtil::isa<VariantGepSCGEdge>(outSEdge)) {
             PointsTo vgepProPts;
@@ -2989,7 +3000,7 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
                 else
                     vgepProPts.set(sCG->getFIObjVar(o));
             }
-            propagateDelPts_IPA(vgepProPts, dstId);
+            propagateDelPts_IPA(vgepProPts, dstId, proping);
         }
         else if (SVFUtil::isa<NormalGepSCGEdge>(outSEdge)) {
             const NormalGepSCGEdge* ngep = SVFUtil::dyn_cast<NormalGepSCGEdge>(outSEdge);
@@ -3003,7 +3014,7 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
                     ngepProPts.set(fieldSrcPtdNode);
                 }
             }
-            propagateDelPts_IPA(ngepProPts, dstId);
+            propagateDelPts_IPA(ngepProPts, dstId, proping);
         }
     }
 
@@ -3052,6 +3063,7 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId)
             }
         }
     }
+    proping.reset(nodeId);
 }
 
 void AndersenInc::processDeletion_EdgeConstraint_IPA()
@@ -3080,6 +3092,7 @@ void AndersenInc::processDeletion_EdgeConstraint_IPA()
         }
         delete sdk;
     }
+    SVFUtil::outs() << "IPA 1 done.\n";
 
     // IPA: 2. process direct edge
     do {

@@ -27,7 +27,18 @@ u32_t AndersenInc::numOfSfrs = 0;
 u32_t AndersenInc::numOfFieldExpand = 0;
 
 u32_t AndersenInc::numOfSCCDetection = 0;
+u32_t AndersenInc::numOfSCCDetectionIns = 0;
+u32_t AndersenInc::numOfSCCDetectionDel = 0;
+u32_t AndersenInc::numOfSCCDetectionIPAIns = 0;
+u32_t AndersenInc::numOfSCCDetectionIPADel = 0;
+
+
 double AndersenInc::timeOfSCCDetection = 0;
+double AndersenInc::timeOfSCCDetectionIns = 0;
+double AndersenInc::timeOfSCCDetectionDel = 0;
+double AndersenInc::timeOfSCCDetectionIPADel = 0;
+double AndersenInc::timeOfSCCDetectionIPAIns = 0;
+
 double AndersenInc::timeOfSCCMerges = 0;
 double AndersenInc::timeOfCollapse = 0;
 double AndersenInc::timeOfCollapsePWC = 0;
@@ -2115,6 +2126,8 @@ void AndersenInc::processSCCRedetection()
         unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
         double sccEnd = stat->getClk();
         timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+        timeOfSCCDetectionDel += (sccEnd - sccStart) / TIMEINTERVAL;
+        numOfSCCDetectionDel ++;
         if (1 == sccKeep) {
             for (SDK* sdk: rep2EdgeSet[oldRep])
                 delete sdk;
@@ -2161,7 +2174,8 @@ bool AndersenInc::processSCCRedetection_IPA(NodeID rep)
     double sccStart = stat->getClk();
     unsigned sccKeep = sCG->sccBreakDetect(oldRep, newReps, stat);
     double sccEnd = stat->getClk();
-    timeOfDeletionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+    timeOfSCCDetectionIPADel += (sccEnd - sccStart) / TIMEINTERVAL;
+    numOfSCCDetectionIPADel++;
     if (1 == sccKeep) {
         return false;
     }
@@ -3913,6 +3927,8 @@ void AndersenInc::processInsertion()
             SCCDetect();
             double sccEnd = stat->getClk();
             timeOfInsertionSCC += (sccEnd - sccStart) / TIMEINTERVAL;
+            timeOfSCCDetectionIns += (sccEnd - sccStart) / TIMEINTERVAL;
+            numOfSCCDetectionIns++;
         }
 
         // build propagate map
@@ -4178,7 +4194,12 @@ bool AndersenInc::processCopyAddition_IPA(NodeID srcid, NodeID dstid, FConstrain
     newSEdge |= (nullptr != sCG->addCopySCGEdge(srcid, dstid, true));
     if (newSEdge) {
         // insDirectConsVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
+        double sbegin = stat->getClk();
         SCCDetect(); //2024.4 TODO
+        double send = stat->getClk();
+        timeOfInsertionSCC += (send - sbegin) / TIMEINTERVAL;
+        timeOfSCCDetectionIPAIns += (send - sbegin) / TIMEINTERVAL;
+        numOfSCCDetectionIPAIns++;
         processCopyConstraintAddition_IPA(srcid, dstid);
     }        
         // insEdgeVec.push_back(new SDK(srcid, dstid, FConstraintEdge::FCopy));
@@ -4204,7 +4225,12 @@ bool AndersenInc::processVariantGepAddition_IPA(NodeID srcid, NodeID dstid)
     bool newSEdge = false;
     newSEdge |= (nullptr != sCG->addVariantGepSCGEdge(srcid, dstid));
     if (newSEdge){
-        SCCDetect();
+        double sbegin = stat->getClk();
+        SCCDetect(); //2024.4 TODO
+        double send = stat->getClk();
+        timeOfInsertionSCC += (send - sbegin) / TIMEINTERVAL;
+        timeOfSCCDetectionIPAIns += (send - sbegin) / TIMEINTERVAL;
+        numOfSCCDetectionIPAIns++;
         processVariantGepConstraintAddition_IPA(srcid, dstid);
     }
     return newSEdge;
@@ -4231,7 +4257,12 @@ bool AndersenInc::processNormalGepAddition_IPA(NodeID srcid, NodeID dstid, const
     bool newSEdge = false;
     newSEdge |= (nullptr != sCG->addNormalGepSCGEdge(srcid, dstid, ap));
     if (newSEdge) {
-        SCCDetect();
+        double sbegin = stat->getClk();
+        SCCDetect(); //2024.4 TODO
+        double send = stat->getClk();
+        timeOfInsertionSCC += (send - sbegin) / TIMEINTERVAL;
+        timeOfSCCDetectionIPAIns += (send - sbegin) / TIMEINTERVAL;
+        numOfSCCDetectionIPAIns++;
         processNormalGepConstraintAddition_IPA(srcid, dstid, ap);
     }
         
@@ -4254,7 +4285,7 @@ void AndersenInc::processCopyConstraintAddition_IPA(NodeID srcid, NodeID dstid)
     PointsTo changePts = getPts(srcid);
     changePts = changePts - getPts(repdst);
     // insPropMap[repdst] |= changePts;
-    propagateInsPts_IPA(changePts,  repdst, sccRepNode(srcid) == repdst); 
+    STAT_TIME(timeOfInsertionProp, propagateInsPts_IPA(changePts,  repdst, sccRepNode(srcid) == repdst)); 
 }
 
 void AndersenInc::processVariantGepConstraintAddition(NodeID srcid, NodeID dstid)
@@ -4291,7 +4322,7 @@ void AndersenInc::processVariantGepConstraintAddition_IPA(NodeID srcid, NodeID d
     }
     NodeID repdst = sccRepNode(dstid);
     ptsChange = ptsChange - getPts(repdst);
-    propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst);
+    STAT_TIME(timeOfInsertionProp, propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst));
     // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
 }
 
@@ -4328,7 +4359,7 @@ void AndersenInc::processNormalGepConstraintAddition_IPA(NodeID srcid, NodeID ds
     }
     NodeID repdst = sccRepNode(dstid);
     ptsChange = ptsChange - getPts(repdst);
-    propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst);
+    STAT_TIME(timeOfInsertionProp, propagateInsPts_IPA(ptsChange, repdst, sccRepNode(srcid) == repdst));
     // STAT_TIME(timeOfInsertionProp, propagateInsPts(ptsChange, dstid, sccRepNode(srcid) == sccRepNode(dstid)));     
 }
 

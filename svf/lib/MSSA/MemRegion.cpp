@@ -462,6 +462,8 @@ void MRGenerator::initChangedFunctions_RR()
     WorkList loadWL;
     // WorkList storeResetFunctions;
     // WorkList loadResetFunctions;
+    SVFUtil::outs() << "Store changed functions: " << storeChangedFunctions.size() << "\n";
+    SVFUtil::outs() << "Load changed functions: " << loadChangedFunctions.size() << "\n";
     for (auto it = storeChangedFunctions.begin(), eit = storeChangedFunctions.end();
         it != eit; ++it)
     {
@@ -480,7 +482,8 @@ void MRGenerator::initChangedFunctions_RR()
         loadWL.push(id);
         loadResetFunctions.set(id);
     }
-
+    // SVFUtil::outs() << "store reset functions num: " << storeResetFunctions.count() << "\n";
+    // SVFUtil::outs() << "load reset functions num: " << loadResetFunctions.count() << "\n";
     while (!storeWL.empty()) {
         NodeID callGraphNodeID = storeWL.pop();
         PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
@@ -510,6 +513,8 @@ void MRGenerator::initChangedFunctions_RR()
             }
         }
     }
+    // SVFUtil::outs() << "store reset functions num: " << storeResetFunctions.count() << "\n";
+    // SVFUtil::outs() << "load reset functions num: " << loadResetFunctions.count() << "\n";
     
 }
 /*!
@@ -695,6 +700,7 @@ void MRGenerator::incrementalModRefAnalysis_RR()
 
     callGraphSCC->find();
     
+    initChangedFunctions_RR();
     // 2. reset mod ref info
     resetModRefInfo_RR();
 

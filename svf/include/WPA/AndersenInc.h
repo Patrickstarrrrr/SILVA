@@ -130,7 +130,17 @@ public:
     static u32_t numOfFieldExpand;
 
     static u32_t numOfSCCDetection;
+    static u32_t numOfSCCDetectionIPAIns;
+    static u32_t numOfSCCDetectionIPADel;
+    static u32_t numOfSCCDetectionIns;
+    static u32_t numOfSCCDetectionDel;
+
     static double timeOfSCCDetection;
+    static double timeOfSCCDetectionIns;
+    static double timeOfSCCDetectionDel;
+    static double timeOfSCCDetectionIPAIns;
+    static double timeOfSCCDetectionIPADel;
+
     static double timeOfSCCMerges;
     static double timeOfCollapse;
     static double timeOfCollapsePWC;

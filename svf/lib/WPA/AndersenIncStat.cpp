@@ -330,6 +330,11 @@ void AndersenIncStat::performStat()
     timeStatMap["PropInsertionTime"] = AndersenInc::timeOfInsertionProp;
 
     timeStatMap["SCCDetectTime"] = AndersenInc::timeOfSCCDetection;
+    timeStatMap["SCCDetectTimeIPAIns"] = AndersenInc::timeOfSCCDetectionIPAIns;
+    timeStatMap["SCCDetectTimeIPADel"] = AndersenInc::timeOfSCCDetectionIPADel;
+    timeStatMap["SCCDetectTimeIns"] = AndersenInc::timeOfSCCDetectionIns;
+    timeStatMap["SCCDetectTimeDel"] = AndersenInc::timeOfSCCDetectionDel;
+    
     timeStatMap["SCCMergeTime"] =  AndersenInc::timeOfSCCMerges;
     timeStatMap[CollapseTime] =  AndersenInc::timeOfCollapse;
     timeStatMap["CollapsePWCTime"] = AndersenInc::timeOfCollapsePWC;

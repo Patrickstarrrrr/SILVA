@@ -1,0 +1,7 @@
+diff -N -r -X DiffPattern.txt ./oldDir/example.cpp ./newDir/example.cpp
+4,5c4,5
+<     *p = t2;
+<     *q = t1;
+---
+>     *p = t1;
+>     *q = t2;

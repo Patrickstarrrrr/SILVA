@@ -372,6 +372,12 @@ void AndersenIncStat::performStat()
     PTNumStatMap["IndEdgeSolved"] = pta->getNumOfResolvedIndCallEdge();
 
     PTNumStatMap["NumOfSCCDetect"] = AndersenInc::numOfSCCDetection;
+    PTNumStatMap["NumOfSCCDetectIPAIns"] = AndersenInc::numOfSCCDetectionIPAIns;
+    PTNumStatMap["NumOfSCCDetectIPADel"] = AndersenInc::numOfSCCDetectionIPADel;
+    PTNumStatMap["NumOfSCCDetectIns"] = AndersenInc::numOfSCCDetectionIns;
+    PTNumStatMap["NumOfSCCDetectDel"] = AndersenInc::numOfSCCDetectionDel;
+    
+    
     PTNumStatMap["TotalCycleNum"] = _NumOfCycles;
     PTNumStatMap["TotalPWCCycleNum"] = _NumOfPWCCycles;
     PTNumStatMap["NodesInCycles"] = _NumOfNodesInCycles;

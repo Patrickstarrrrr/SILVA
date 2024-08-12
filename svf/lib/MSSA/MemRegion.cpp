@@ -651,8 +651,10 @@ void MRGenerator::resetModRefInfo_RR()
     resetFunctions |= loadResetFunctions;
     SVFUtil::outs() << "store reset functions num: " << storeResetFunctions.count() << "\n";
     SVFUtil::outs() << "load reset functions num: " << loadResetFunctions.count() << "\n";
-    SVFUtil::outs() << "reset functions num: " << resetFunctions.count() << "\n";
+    // SVFUtil::outs() << "reset functions num: " << resetFunctions.count() << "\n";
     int funcount = 0;
+    unsigned modSum = 0;
+    unsigned refSum = 0; 
     // reset fun's mod ref info: funToPointsToMap & funToMods/RefsMap
     for (NodeID funid: resetFunctions) {
         funcount++;
@@ -661,14 +663,18 @@ void MRGenerator::resetModRefInfo_RR()
         //     continue;
         funToPointsToMap[fun].clear();
         funToPointsToMap_ls[fun].clear();
+        modSum += funToModsMap[fun].count();
         funToModsMap[fun].clear();
         funToModsMap_ls[fun].clear();
         funToModsMap_cs[fun].clear();
+        refSum += funToRefsMap[fun].count();
         funToRefsMap[fun].clear();
         funToRefsMap_ls[fun].clear();
         funToRefsMap_cs[fun].clear();
     }
     SVFUtil::outs() << "reset functions num: " << funcount << "\n";
+    SVFUtil::outs() << "reset Mod elements num: " << modSum << "\n";
+    SVFUtil::outs() << "reset Ref elements num: " << refSum << "\n";
     int cscount = 0;
     // reset cs's mod ref info: csToArgs/RetPtsMap & csToMods/RefsMap
     for(SVFIR::CallSiteSet::const_iterator it =  pta->getPAG()->getCallSiteSet().begin(),
@@ -699,16 +705,29 @@ void MRGenerator::incrementalModRefAnalysis_RR()
     collectGlobals();
 
     callGraphSCC->find();
-    
+
+    double initCFStart = stat->getClk();
     initChangedFunctions_RR();
+    double initCFEnd = stat->getClk();
+    SVFUtil::outs() << "Time of init changed func MRA-RR: " << (initCFEnd - initCFStart)/TIMEINTERVAL << "\n";
+
     // 2. reset mod ref info
+    double resetStart = stat->getClk();
     resetModRefInfo_RR();
+    double resetEnd = stat->getClk();
+    SVFUtil::outs() << "Time of reset MRA-RR: " << (resetEnd - resetStart)/TIMEINTERVAL << "\n";
 
     // 3. recollect mod-ref for loads/stores
+    double recomputeLSStart = stat->getClk();
     collectModRefForLoadStore_RR();
+    double recomputeLSEnd = stat->getClk();
+    SVFUtil::outs() << "Time of recompute intra: " << (recomputeLSEnd - recomputeLSStart)/TIMEINTERVAL << "\n";
 
     // 4. recollect mod-ref for call
+    double recomputeCallStart = stat->getClk();
     collectModRefForCall_RR();
+    double recomputeCallEnd = stat->getClk();
+    SVFUtil::outs() << "Time of recompute intra: " << (recomputeCallEnd - recomputeCallStart)/TIMEINTERVAL << "\n";
 
     double incEnd = stat->getClk();
     SVFUtil::outs() << "Time of incremental MRA-RR: " << (incEnd - incStart)/TIMEINTERVAL << "\n";
@@ -745,6 +764,11 @@ void MRGenerator::incrementalModRefAnalysis()
 
     // 1. reset and propagate del ref and del mod from the bottom up based on old globs and argspts/retspts
     SVFUtil::outs() << "Deletion Mod Ref Reset and Propagation Starts...\n";
+    resetModSum = 0;
+    resetRefSum = 0;
+    recomModSum = 0;
+    resetRefSum = 0;
+    impactFunc = 0;
     double resetStart = stat->getClk();
     WorkList worklist;
     WorkList modlist;
@@ -766,6 +790,7 @@ void MRGenerator::incrementalModRefAnalysis()
                 const NodeBS newMod_ls = funToModsMap_ls[fun];
                 const NodeBS oldMod_ls = funToModsMap_ls_t[fun];
                 NodeBS dMod = oldMod_ls - newMod_ls;
+                resetModSum += dMod.count();
                 if (!dMod.empty()) {
                     for (NodeID o: dMod) {
                         funToModsMap[fun].reset(o);
@@ -779,6 +804,7 @@ void MRGenerator::incrementalModRefAnalysis()
                 const NodeBS newRef_ls = funToRefsMap_ls[fun];
                 const NodeBS oldRef_ls = funToRefsMap_ls_t[fun];
                 NodeBS dRef = oldRef_ls - newRef_ls;
+                resetRefSum += dRef.count();
                 if (!dRef.empty()) {
                     for (NodeID o: dRef) {
                         funToRefsMap[fun].reset(o);
@@ -800,11 +826,25 @@ void MRGenerator::incrementalModRefAnalysis()
         PTACallGraphNode* callGraphNode = callGraph->getCallGraphNode(callGraphNodeID);
         delRefAnalysis(callGraphNode, reflist);
     }
-    funToDelModsMap.clear();
-    funToDelRefsMap.clear();
     double resetEnd = stat->getClk();
     SVFUtil::outs() << "Time of Resetting and Propatating Deletion Mod Ref Set: " << 
         (resetEnd - resetStart) / TIMEINTERVAL << "\n";
+
+    Set<const SVFFunction*> impactFuncSet;
+    for (auto it = funToDelModsMap.begin(), eit = funToDelModsMap.end(); it != eit; ++it)
+    {
+        impactFuncSet.insert(it->first);
+    }
+    for (auto it = funToDelRefsMap.begin(), eit = funToDelRefsMap.end(); it != eit; ++it)
+    {
+        impactFuncSet.insert(it->first);
+    }
+    impactFunc = impactFuncSet.size();
+    funToDelModsMap.clear();
+    funToDelRefsMap.clear();
+
+    
+    SVFUtil::outs() << "Impacted function num: " << impactFunc << "\n";
 
     // 2. recompute globs and get del globs
     SVFUtil::outs() << "Globs and Deletion Globs Recomputation Starts...\n";
@@ -874,7 +914,9 @@ void MRGenerator::incrementalModRefAnalysis()
     }
     double rcEnd = stat->getClk();
     SVFUtil::outs() << "Time of recomputing mod ref: " << (rcEnd - rcStart)/TIMEINTERVAL << "\n";
-
+    SVFUtil::outs() << "reset Mod element num: " << resetModSum << "\n";
+    SVFUtil::outs() << "reset Ref element num: " << resetRefSum << "\n";
+    
     // 6. addCPtsToCallSite
     SVFUtil::outs() << "AddCPtsToCallSite Starts...\n";
     double acpStart = stat->getClk();
@@ -1199,6 +1241,7 @@ void MRGenerator::delRefSideEffectOfFunction_callSite(const SVFFunction* fun, co
             }
         }
     }
+    resetRefSum += delRefs.count();
 }
 void MRGenerator::addRefSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& refs)
 {
@@ -1256,6 +1299,7 @@ void MRGenerator::delModSideEffectOfFunction_callSite(const SVFFunction* fun, co
             }
         }
     }
+    resetModSum += delMods.count();
 }
 void MRGenerator::addModSideEffectOfFunction_loadStore_inc(const SVFFunction* fun, const NodeBS& mods)
 {

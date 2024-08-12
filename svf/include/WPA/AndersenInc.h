@@ -406,6 +406,8 @@ private:
     NodeBS ptsChangeNodes;
     StmtSet delStmts; // TODO: -- wjy
     StmtSet insStmts; // TODO: -- wjy
+    unsigned delNodeNum = 0;
+    unsigned insNodeNum = 0;
     // NodeBS ptsChainChangeNodes;
 public:
     inline StmtSet& getDelStmts() { return delStmts; }

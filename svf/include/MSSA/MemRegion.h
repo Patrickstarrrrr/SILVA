@@ -212,6 +212,12 @@ private:
     NodeBS resetFunctions;
     FunctionSet mods_lsChangedFunctions;
     FunctionSet refs_lsChangedFunctions;
+    unsigned resetModSum;
+    unsigned recomModSum;
+    unsigned resetRefSum;
+    unsigned recomRefSum;
+    unsigned impactFunc;
+    
     void initChangedFunctions();
     void initChangedFunctions_RR();
     

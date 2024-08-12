@@ -161,6 +161,7 @@ void AndersenInc::analyze_inc_reset()
     SVFUtil::outs() << "      --- Time of Restore remove edge(Reset): " << sCG->timeOfRemoveEdge << "\n";
     SVFUtil::outs() << "      --- Time of Restore add edge(Reset): " << sCG->timeOfAddEdge<< "\n";
     SVFUtil::outs() << "  - Time of Del Pts Prop(Reset): " << timeOfDeletionProp << "\n";
+    SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
     SVFUtil::outs() << "------------------------------------------------------------------\n";
     // SVFUtil::outs() << "Process insertion analysis(Reset):\n";
     // double insStart = stat->getClk();
@@ -201,7 +202,8 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "      --- Time of Restore collect edge: " << sCG->timeOfCollectEdge << "\n";
         SVFUtil::outs() << "      --- Time of Restore remove edge: " << sCG->timeOfRemoveEdge << "\n";
         SVFUtil::outs() << "      --- Time of Restore add edge: " << sCG->timeOfAddEdge<< "\n";
-        SVFUtil::outs() << "  - Time of Del Pts Prop " << timeOfDeletionProp << "\n";
+        SVFUtil::outs() << "  - Time of Del Pts Prop: " << timeOfDeletionProp << "\n";
+        SVFUtil::outs() << "  - Num of Del Nodes: " << delNodeNum << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
     }
     
@@ -217,6 +219,7 @@ void AndersenInc::analyze_inc()
         SVFUtil::outs() << "Time of insertion PTA: " << timeOfInsertionPTA << "\n";
         SVFUtil::outs() << "  - Time of SCC Insertion (so far): " << timeOfInsertionSCC << "\n";
         SVFUtil::outs() << "  - Time of Ins Pts Prop: " << timeOfInsertionProp << "\n";
+        SVFUtil::outs() << "  - Num of Ins Nodes: " << insNodeNum << "\n";
         SVFUtil::outs() << "------------------------------------------------------------------\n";
         timeOfIncrementalPTA = timeOfInsertionPTA;
         SVFUtil::outs() << "Time of incremental PTA: " << timeOfIncrementalPTA << "\n";
@@ -2795,7 +2798,9 @@ void AndersenInc::propagateDelPts(const PointsTo& pts, NodeID nodeId)
     if (pts.empty()) {
         return;
     }
-    
+
+    delNodeNum ++;
+
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
     nodeId = node->getId();
     PointsTo dPts; // objs need to be removed from pts(nodeId)
@@ -2945,6 +2950,9 @@ void AndersenInc::propagateDelPts_IPA(const PointsTo& pts, NodeID nodeId, NodeBS
     if (pts.empty()) {
         return;
     }
+
+    delNodeNum ++;
+
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
 
     nodeId = node->getId();
@@ -4378,6 +4386,8 @@ void AndersenInc::propagateInsPts(const PointsTo& pts, NodeID nodeId, bool sameS
         }
     }
     
+    insNodeNum ++;
+
     // pts(nodeId) = pts(nodeId) U dPts
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
     nodeId = node->getId();
@@ -4482,6 +4492,8 @@ void AndersenInc::propagateInsPts_IPA(const PointsTo& pts, NodeID nodeId, bool s
         }
     }
     
+    insNodeNum ++;
+
     // pts(nodeId) = pts(nodeId) U dPts
     SConstraintNode* node = sCG->getSConstraintNode(nodeId);
     nodeId = node->getId();
